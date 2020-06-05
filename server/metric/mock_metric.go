@@ -26,33 +26,24 @@ type MockMetricServer struct {
 	monitoring.UnimplementedMetricServiceServer
 }
 
-func (s *MockMetricServer) ListMonitoredResourceDescriptors(
-	ctx context.Context,
-	req *monitoring.ListMonitoredResourceDescriptorsRequest,
+func (s *MockMetricServer) ListMonitoredResourceDescriptors(ctx context.Context, req *monitoring.ListMonitoredResourceDescriptorsRequest,
 ) (*monitoring.ListMonitoredResourceDescriptorsResponse, error) {
-
 	return &monitoring.ListMonitoredResourceDescriptorsResponse{
 		ResourceDescriptors: []*monitoredres.MonitoredResourceDescriptor{},
 		NextPageToken:       "",
 	}, nil
 }
 
-func (s *MockMetricServer) ListMetricDescriptors(
-	ctx context.Context,
-	req *monitoring.ListMetricDescriptorsRequest,
+func (s *MockMetricServer) ListMetricDescriptors(ctx context.Context, req *monitoring.ListMetricDescriptorsRequest,
 ) (*monitoring.ListMetricDescriptorsResponse, error) {
-
 	return &monitoring.ListMetricDescriptorsResponse{
 		MetricDescriptors: []*metric.MetricDescriptor{},
 		NextPageToken:     "",
 	}, nil
 }
 
-func (s *MockMetricServer) ListTimeSeries(
-	ctx context.Context,
-	req *monitoring.ListTimeSeriesRequest,
+func (s *MockMetricServer) ListTimeSeries(ctx context.Context, req *monitoring.ListTimeSeriesRequest,
 ) (*monitoring.ListTimeSeriesResponse, error) {
-
 	return &monitoring.ListTimeSeriesResponse{
 		TimeSeries:      []*monitoring.TimeSeries{},
 		NextPageToken:   "",
