@@ -15,6 +15,7 @@
 package metric
 
 import (
+	"github.com/golang/protobuf/ptypes/empty"
 	"golang.org/x/net/context"
 	"google.golang.org/genproto/googleapis/api/metric"
 	"google.golang.org/genproto/googleapis/api/monitoredres"
@@ -26,6 +27,11 @@ type MockMetricServer struct {
 	monitoring.UnimplementedMetricServiceServer
 }
 
+func (s *MockMetricServer) GetMonitoredResourceDescriptor(ctx context.Context, req *monitoring.GetMonitoredResourceDescriptorRequest,
+) (*monitoredres.MonitoredResourceDescriptor, error) {
+	return &monitoredres.MonitoredResourceDescriptor{}, nil
+}
+
 func (s *MockMetricServer) ListMonitoredResourceDescriptors(ctx context.Context, req *monitoring.ListMonitoredResourceDescriptorsRequest,
 ) (*monitoring.ListMonitoredResourceDescriptorsResponse, error) {
 	return &monitoring.ListMonitoredResourceDescriptorsResponse{
@@ -34,12 +40,32 @@ func (s *MockMetricServer) ListMonitoredResourceDescriptors(ctx context.Context,
 	}, nil
 }
 
+func (s *MockMetricServer) GetMetricDescriptor(ctx context.Context, req *monitoring.GetMetricDescriptorRequest,
+) (*metric.MetricDescriptor, error) {
+	return &metric.MetricDescriptor{}, nil
+}
+
+func (s *MockMetricServer) CreateMetricDescriptor(ctx context.Context, req *monitoring.CreateMetricDescriptorRequest,
+) (*metric.MetricDescriptor, error) {
+	return &metric.MetricDescriptor{}, nil
+}
+
+func (s *MockMetricServer) DeleteMetricDescriptor(ctx context.Context, req *monitoring.DeleteMetricDescriptorRequest,
+) (*empty.Empty, error) {
+	return &empty.Empty{}, nil
+}
+
 func (s *MockMetricServer) ListMetricDescriptors(ctx context.Context, req *monitoring.ListMetricDescriptorsRequest,
 ) (*monitoring.ListMetricDescriptorsResponse, error) {
 	return &monitoring.ListMetricDescriptorsResponse{
 		MetricDescriptors: []*metric.MetricDescriptor{},
 		NextPageToken:     "",
 	}, nil
+}
+
+func (s *MockMetricServer) CreateTimeSeries(ctx context.Context, req *monitoring.CreateTimeSeriesRequest,
+) (*empty.Empty, error) {
+	return &empty.Empty{}, nil
 }
 
 func (s *MockMetricServer) ListTimeSeries(ctx context.Context, req *monitoring.ListTimeSeriesRequest,
