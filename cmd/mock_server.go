@@ -16,7 +16,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"net"
 
@@ -26,20 +25,27 @@ import (
 	"github.com/googleinterns/cloud-operations-api-mock/server/trace"
 )
 
-const defaultPort = 8080
+const (
+	defaultAddress = "localhost:8080"
+)
 
-var port = flag.Int("port", defaultPort, "The port to run the server on.")
+var (
+	address = flag.String("address", defaultAddress,
+		"The address to run the server on, of the form <host>:<port>.")
+)
 
 func main() {
 	flag.Parse()
 
-	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", *port))
+	lis, err := net.Listen("tcp", *address)
 	if err != nil {
 		log.Fatalf("mock server failed to listen: %v", err)
 	}
 
 	grpcServer := grpc.NewServer()
 	cloudtrace.RegisterTraceServiceServer(grpcServer, &trace.MockTraceServer{})
+
+	log.Printf("Listening on %s\n", *address)
 
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("mock server failed to serve: %v", err)
