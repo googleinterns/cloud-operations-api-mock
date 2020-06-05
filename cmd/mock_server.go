@@ -20,8 +20,10 @@ import (
 	"net"
 
 	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"
+	"google.golang.org/genproto/googleapis/monitoring/v3"
 	"google.golang.org/grpc"
 
+	"github.com/googleinterns/cloud-operations-api-mock/server/metric"
 	"github.com/googleinterns/cloud-operations-api-mock/server/trace"
 )
 
@@ -44,6 +46,7 @@ func main() {
 
 	grpcServer := grpc.NewServer()
 	cloudtrace.RegisterTraceServiceServer(grpcServer, &trace.MockTraceServer{})
+	monitoring.RegisterMetricServiceServer(grpcServer, &metric.MockMetricServer{})
 
 	log.Printf("Listening on %s\n", *address)
 
