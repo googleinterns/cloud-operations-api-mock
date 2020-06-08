@@ -23,6 +23,8 @@ import (
 
 	"github.com/golang/protobuf/ptypes/empty"
 	"google.golang.org/genproto/googleapis/monitoring/v3"
+	"google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/genproto/googleapis/api/monitoredres"
 	"google.golang.org/genproto/googleapis/api/metric"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
@@ -72,6 +74,114 @@ func TestMain(m *testing.M) {
 
 func bufDialer(context.Context, string) (net.Conn, error) {
 	return lis.Dial()
+}
+
+func TestMockMetricServer_CreateTimeSeries(t *testing.T) {
+	cases := []struct {
+		in *monitoring.CreateTimeSeriesRequest
+		want *empty.Empty
+	}{
+		{
+			&monitoring.CreateTimeSeriesRequest{
+				Name: "test create time series request",
+			},
+			&empty.Empty{},
+		},
+	}
+
+	for _, c := range cases {
+		response, err := client.CreateTimeSeries(ctx, c.in)
+		if err != nil {
+			t.Fatalf("failed to call CreateTimeSeries %v", err)
+		}
+
+		if !proto.Equal(response, c.want) {
+			t.Errorf("CreateTimeSeries(%q) == %q, want %q", c.in, response, c.want)
+		}
+	}
+}
+
+func TestMockMetricServer_ListTimeSeries(t *testing.T) {
+	cases := []struct {
+		in *monitoring.ListTimeSeriesRequest
+		want *monitoring.ListTimeSeriesResponse
+	}{
+		{
+			&monitoring.ListTimeSeriesRequest{
+				Name: "test list time series request",
+			},
+			&monitoring.ListTimeSeriesResponse{
+				TimeSeries:      []*monitoring.TimeSeries{},
+				NextPageToken:   "",
+				ExecutionErrors: []*status.Status{},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		response, err := client.ListTimeSeries(ctx, c.in)
+		if err != nil {
+			t.Fatalf("failed to call ListTimeSeries %v", err)
+		}
+
+		if !proto.Equal(response, c.want) {
+			t.Errorf("ListTimeSeries(%q) == %q, want %q", c.in, response, c.want)
+		}
+	}
+}
+
+func TestMockMetricServer_GetMonitoredResourceDescriptor(t *testing.T) {
+	cases := []struct {
+		in *monitoring.GetMonitoredResourceDescriptorRequest
+		want *monitoredres.MonitoredResourceDescriptor
+	}{
+		{
+			&monitoring.GetMonitoredResourceDescriptorRequest{
+				Name: "test get metric monitored resource descriptor",
+			},
+			&monitoredres.MonitoredResourceDescriptor{},
+		},
+	}
+
+	for _, c := range cases {
+		response, err := client.GetMonitoredResourceDescriptor(ctx, c.in)
+		if err != nil {
+			t.Fatalf("failed to call GetMonitoredResourceDescriptor %v", err)
+		}
+
+		if !proto.Equal(response, c.want) {
+			t.Errorf("GetMonitoredResourceDescriptor(%q) == %q, want %q", c.in, response, c.want)
+		}
+	}
+}
+
+
+func TestMockMetricServer_ListMonitoredResourceDescriptors(t *testing.T) {
+	cases := []struct {
+		in *monitoring.ListMonitoredResourceDescriptorsRequest
+		want *monitoring.ListMonitoredResourceDescriptorsResponse
+	}{
+		{
+			&monitoring.ListMonitoredResourceDescriptorsRequest{
+				Name: "test list monitored resource descriptors",
+			},
+			&monitoring.ListMonitoredResourceDescriptorsResponse{
+				ResourceDescriptors: []*monitoredres.MonitoredResourceDescriptor{},
+				NextPageToken:       "",
+			},
+		},
+	}
+
+	for _, c := range cases {
+		response, err := client.ListMonitoredResourceDescriptors(ctx, c.in)
+		if err != nil {
+			t.Fatalf("failed to call ListMonitoredResourceDescriptors %v", err)
+		}
+
+		if !proto.Equal(response, c.want) {
+			t.Errorf("ListMonitoredResourceDescriptors(%q) == %q, want %q", c.in, response, c.want)
+		}
+	}
 }
 
 func TestMockMetricServer_GetMetricDescriptor(t *testing.T) {
@@ -146,6 +256,34 @@ func TestMockMetricServer_DeleteMetricDescriptor(t *testing.T) {
 
 		if !proto.Equal(response, c.want) {
 			t.Errorf("DeleteMetricDescriptorRequest(%q) == %q, want %q", c.in, response, c.want)
+		}
+	}
+}
+
+func TestMockMetricServer_ListMetricDescriptors(t *testing.T) {
+	cases := []struct {
+		in *monitoring.ListMetricDescriptorsRequest
+		want *monitoring.ListMetricDescriptorsResponse
+	}{
+		{
+			&monitoring.ListMetricDescriptorsRequest{
+				Name: "test list metric decriptors request",
+			},
+			&monitoring.ListMetricDescriptorsResponse{
+				MetricDescriptors: []*metric.MetricDescriptor{},
+				NextPageToken:     "",
+			},
+		},
+	}
+
+	for _, c := range cases {
+		response, err := client.ListMetricDescriptors(ctx, c.in)
+		if err != nil {
+			t.Fatalf("failed to call ListMetricDescriptors %v", err)
+		}
+
+		if !proto.Equal(response, c.want) {
+			t.Errorf("ListMetricDescriptors(%q) == %q, want %q", c.in, response, c.want)
 		}
 	}
 }
