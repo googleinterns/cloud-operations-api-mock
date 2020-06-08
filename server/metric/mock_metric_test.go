@@ -23,8 +23,7 @@ import (
 
 	"github.com/golang/protobuf/ptypes/empty"
 	"google.golang.org/genproto/googleapis/monitoring/v3"
-	metrics "google.golang.org/genproto/googleapis/api/metric"
-	mockMetricServer "github.com/googleinterns/cloud-operations-api-mock/server/metric"
+	"google.golang.org/genproto/googleapis/api/metric"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/proto"
@@ -43,7 +42,7 @@ func setup() {
 	// Setup the in-memory server.
 	lis = bufconn.Listen(bufSize)
 	grpcServer := grpc.NewServer()
-	monitoring.RegisterMetricServiceServer(grpcServer, &mockMetricServer.MockMetricServer{})
+	monitoring.RegisterMetricServiceServer(grpcServer, &MockMetricServer{})
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
 			log.Fatalf("server exited with error: %v", err)
@@ -78,20 +77,20 @@ func bufDialer(context.Context, string) (net.Conn, error) {
 func TestMockMetricServer_GetMetricDescriptor(t *testing.T) {
 	cases := []struct {
 		in *monitoring.GetMetricDescriptorRequest
-		want *metrics.MetricDescriptor
+		want *metric.MetricDescriptor
 	}{
 		{
 			&monitoring.GetMetricDescriptorRequest{
 				Name: "test get metric descriptor",
 			},
-			&metrics.MetricDescriptor{},
+			&metric.MetricDescriptor{},
 		},
 	}
 
-	for _,c := range cases {
+	for _, c := range cases {
 		response, err := client.GetMetricDescriptor(ctx, c.in)
 		if err != nil {
-			t.Fatalf("failed to call GetMetricDescriptor: %v", err)
+			t.Fatalf("failed to call GetMetricDescriptor %v", err)
 		}
 
 		if !proto.Equal(response, c.want) {
@@ -103,18 +102,18 @@ func TestMockMetricServer_GetMetricDescriptor(t *testing.T) {
 func TestMockMetricServer_CreateMetricDescriptor(t *testing.T) {
 	cases := []struct {
 		in *monitoring.CreateMetricDescriptorRequest
-		want *metrics.MetricDescriptor
+		want *metric.MetricDescriptor
 	}{
 		{
 			&monitoring.CreateMetricDescriptorRequest{
 				Name: "test create metric descriptor",
-				MetricDescriptor: &metrics.MetricDescriptor{},
+				MetricDescriptor: &metric.MetricDescriptor{},
 			},
-			&metrics.MetricDescriptor{},
+			&metric.MetricDescriptor{},
 		},
 	}
 
-	for _,c := range cases {
+	for _, c := range cases {
 		response, err := client.CreateMetricDescriptor(ctx, c.in)
 		if err != nil {
 			t.Fatalf("failed to call CreateMetricDescriptorRequest: %v", err)
@@ -142,7 +141,7 @@ func TestMockMetricServer_DeleteMetricDescriptor(t *testing.T) {
 	for _,c := range cases {
 		response, err := client.DeleteMetricDescriptor(ctx, c.in)
 		if err != nil {
-			t.Fatalf("failed to call CDeleteMetricDescriptorRequest: %v", err)
+			t.Fatalf("failed to call DeleteMetricDescriptorRequest: %v", err)
 		}
 
 		if !proto.Equal(response, c.want) {
