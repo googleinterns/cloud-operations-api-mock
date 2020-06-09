@@ -16,9 +16,7 @@ package trace
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"math/rand"
 	"net"
 	"os"
 	"testing"
@@ -36,16 +34,17 @@ import (
 const bufSize = 1024 * 1024
 
 var (
-	client cloudtrace.TraceServiceClient
-	conn   *grpc.ClientConn
-	ctx    context.Context
-	lis    *bufconn.Listener
+	client     cloudtrace.TraceServiceClient
+	conn       *grpc.ClientConn
+	ctx        context.Context
+	grpcServer *grpc.Server
+	lis        *bufconn.Listener
 )
 
 func setup() {
 	// Setup the in-memory server.
 	lis = bufconn.Listen(bufSize)
-	grpcServer := grpc.NewServer()
+	grpcServer = grpc.NewServer()
 	cloudtrace.RegisterTraceServiceServer(grpcServer, &MockTraceServer{})
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
@@ -65,6 +64,7 @@ func setup() {
 
 func tearDown() {
 	conn.Close()
+	grpcServer.GracefulStop()
 }
 
 func TestMain(m *testing.M) {
@@ -78,8 +78,7 @@ func bufDialer(context.Context, string) (net.Conn, error) {
 	return lis.Dial()
 }
 
-func generateSpan() *cloudtrace.Span {
-	spanName := fmt.Sprintf("test-span-%d", rand.Intn(100))
+func generateSpan(spanName string) *cloudtrace.Span {
 	startTime, err := ptypes.TimestampProto(time.Now().Add(-(time.Second * time.Duration(30))))
 	if err != nil {
 		log.Fatalf("failed to create span with error: %v", err)
@@ -100,9 +99,9 @@ func generateSpan() *cloudtrace.Span {
 
 func TestMockTraceServer_BatchWriteSpans(t *testing.T) {
 	spans := []*cloudtrace.Span{
-		generateSpan(),
-		generateSpan(),
-		generateSpan(),
+		generateSpan("test-span-1"),
+		generateSpan("test-span-2"),
+		generateSpan("test-span-3"),
 	}
 
 	cases := []struct {
@@ -131,7 +130,7 @@ func TestMockTraceServer_BatchWriteSpans(t *testing.T) {
 }
 
 func TestMockTraceServer_CreateSpan(t *testing.T) {
-	span := generateSpan()
+	span := generateSpan("test-span-1")
 	cases := []struct {
 		in   *cloudtrace.Span
 		want *cloudtrace.Span
