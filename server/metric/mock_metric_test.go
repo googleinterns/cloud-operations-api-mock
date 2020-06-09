@@ -37,13 +37,14 @@ var (
 	client monitoring.MetricServiceClient
 	conn   *grpc.ClientConn
 	ctx    context.Context
+	grpcServer *grpc.Server
 	lis    *bufconn.Listener
 )
 
 func setup() {
 	// Setup the in-memory server.
 	lis = bufconn.Listen(bufSize)
-	grpcServer := grpc.NewServer()
+	grpcServer = grpc.NewServer()
 	monitoring.RegisterMetricServiceServer(grpcServer, &MockMetricServer{})
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
@@ -63,6 +64,7 @@ func setup() {
 
 func tearDown() {
 	conn.Close()
+	grpcServer.GracefulStop()
 }
 
 func TestMain(m *testing.M) {
@@ -167,7 +169,6 @@ func TestMockMetricServer_ListMonitoredResourceDescriptors(t *testing.T) {
 			},
 			&monitoring.ListMonitoredResourceDescriptorsResponse{
 				ResourceDescriptors: []*monitoredres.MonitoredResourceDescriptor{},
-				NextPageToken:       "",
 			},
 		},
 	}
@@ -248,7 +249,7 @@ func TestMockMetricServer_DeleteMetricDescriptor(t *testing.T) {
 		},
 	}
 
-	for _,c := range cases {
+	for _, c := range cases {
 		response, err := client.DeleteMetricDescriptor(ctx, c.in)
 		if err != nil {
 			t.Fatalf("failed to call DeleteMetricDescriptorRequest: %v", err)
