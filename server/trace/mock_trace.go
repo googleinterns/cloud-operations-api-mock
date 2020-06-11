@@ -21,8 +21,6 @@ import (
 	"golang.org/x/net/context"
 
 	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type MockTraceServer struct {
@@ -31,16 +29,16 @@ type MockTraceServer struct {
 
 func (s *MockTraceServer) BatchWriteSpans(ctx context.Context, req *cloudtrace.BatchWriteSpansRequest) (*empty.Empty, error) {
 	for _, span := range req.Spans {
-		if isValid, errMsg := validation.IsSpanValid(span); !isValid {
-			return nil, status.Errorf(codes.InvalidArgument, errMsg)
+		if err := validation.IsSpanValid(span); err != nil {
+			return nil, err
 		}
 	}
 	return &empty.Empty{}, nil
 }
 
 func (s *MockTraceServer) CreateSpan(ctx context.Context, span *cloudtrace.Span) (*cloudtrace.Span, error) {
-	if isValid, errMsg := validation.IsSpanValid(span); !isValid {
-		return nil, status.Errorf(codes.InvalidArgument, errMsg)
+	if err := validation.IsSpanValid(span); err != nil {
+		return nil, err
 	}
 	return span, nil
 }
