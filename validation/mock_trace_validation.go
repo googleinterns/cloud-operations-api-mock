@@ -15,11 +15,11 @@
 package validation
 
 import (
-	"fmt"
+	"log"
 	"reflect"
-	"strings"
 
 	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -29,18 +29,9 @@ import (
 var (
 	InvalidTimestampErr   = status.Error(codes.InvalidArgument, "start time must be before end time")
 	MalformedTimestampErr = status.Error(codes.InvalidArgument, "unable to parse timestamp")
+	MissingFieldErr       = status.New(codes.InvalidArgument, "missing required fields")
 	requiredFields        = []string{"Name", "SpanId", "DisplayName", "StartTime", "EndTime"}
 )
-
-type MissingFieldError struct {
-	Code          codes.Code
-	MissingFields []string
-}
-
-func (err *MissingFieldError) Error() string {
-	return fmt.Sprintf("span is missing required fields: %v",
-		strings.Join(err.MissingFields, ", "))
-}
 
 func IsSpanValid(span *cloudtrace.Span) error {
 	if err := validateRequiredFields(span); err != nil {
@@ -55,22 +46,28 @@ func IsSpanValid(span *cloudtrace.Span) error {
 }
 
 func validateRequiredFields(span *cloudtrace.Span) error {
-	var missingFields []string
+	var missingFields []*errdetails.BadRequest_FieldViolation
 	spanReflect := reflect.ValueOf(span)
 
 	for _, field := range requiredFields {
 		if isZero := reflect.Indirect(spanReflect).FieldByName(field).IsZero(); isZero {
-			missingFields = append(missingFields, field)
+			missingFields = append(missingFields, &errdetails.BadRequest_FieldViolation{
+				Field: field,
+			})
 		}
 	}
 
 	if len(missingFields) == 0 {
 		return nil
 	} else {
-		return &MissingFieldError{
-			Code:          codes.InvalidArgument,
-			MissingFields: missingFields,
+		badRequest := &errdetails.BadRequest{}
+		badRequest.FieldViolations = missingFields
+		result, err := MissingFieldErr.WithDetails(badRequest)
+		if err != nil {
+			log.Print("Unable to add field violations")
+			return MissingFieldErr.Err()
 		}
+		return result.Err()
 	}
 }
 

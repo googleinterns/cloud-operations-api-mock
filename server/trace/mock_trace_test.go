@@ -30,7 +30,6 @@ import (
 
 	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/proto"
 )
@@ -181,10 +180,7 @@ func TestMockTraceServer_BatchWriteSpans_Error(t *testing.T) {
 				Name:  "test-project",
 				Spans: missingFieldsSpan,
 			},
-			&validation.MissingFieldError{
-				Code:          codes.InvalidArgument,
-				MissingFields: []string{"Name", "StartTime"},
-			},
+			validation.MissingFieldErr.Err(),
 		},
 		{
 			&cloudtrace.BatchWriteSpansRequest{
@@ -237,10 +233,7 @@ func TestMockTraceServer_CreateSpan_Error(t *testing.T) {
 	}{
 		{
 			generateMissingFieldSpan("test-span-1", "SpanId", "EndTime"),
-			&validation.MissingFieldError{
-				Code:          codes.InvalidArgument,
-				MissingFields: []string{"SpanId", "EndTime"},
-			},
+			validation.MissingFieldErr.Err(),
 		},
 		{
 			generateInvalidTimestampSpan("test-span-2"),
