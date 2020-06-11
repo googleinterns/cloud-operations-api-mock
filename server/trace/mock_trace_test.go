@@ -19,14 +19,18 @@ import (
 	"log"
 	"net"
 	"os"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/googleinterns/cloud-operations-api-mock/validation"
 
 	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/proto"
 )
@@ -97,6 +101,34 @@ func generateSpan(spanName string) *cloudtrace.Span {
 	}
 }
 
+func generateInvalidTimestampSpan(spanName string) *cloudtrace.Span {
+	invalidTimestampSpan := generateSpan(spanName)
+	end, err := ptypes.Timestamp(invalidTimestampSpan.EndTime)
+	if err != nil {
+		log.Fatalf("failed to create span with error: %v", err)
+	}
+	start, err := ptypes.TimestampProto(end.Add(time.Second * time.Duration(30)))
+	if err != nil {
+		log.Fatalf("failed to create span with error: %v", err)
+	}
+	invalidTimestampSpan.StartTime = start
+	return invalidTimestampSpan
+}
+
+func generateMissingFieldSpan(spanName string, missingFields ...string) *cloudtrace.Span {
+	span := generateSpan(spanName)
+	for _, field := range missingFields {
+		removeField(span, field)
+	}
+	return span
+}
+
+func removeField(span *cloudtrace.Span, field string) {
+	spanField := reflect.Indirect(reflect.ValueOf(span)).FieldByName(field)
+	zeroValue := reflect.Zero(spanField.Type())
+	spanField.Set(zeroValue)
+}
+
 func TestMockTraceServer_BatchWriteSpans(t *testing.T) {
 	spans := []*cloudtrace.Span{
 		generateSpan("test-span-1"),
@@ -129,6 +161,54 @@ func TestMockTraceServer_BatchWriteSpans(t *testing.T) {
 	}
 }
 
+func TestMockTraceServer_BatchWriteSpans_Error(t *testing.T) {
+	missingFieldsSpan := []*cloudtrace.Span{
+		generateMissingFieldSpan("test-span-1", "Name", "StartTime"),
+		generateMissingFieldSpan("test-span-2"),
+	}
+
+	invalidTimestampSpans := []*cloudtrace.Span{
+		generateInvalidTimestampSpan("test-span-3"),
+		generateInvalidTimestampSpan("test-span-4"),
+	}
+
+	cases := []struct {
+		in   *cloudtrace.BatchWriteSpansRequest
+		want error
+	}{
+		{
+			&cloudtrace.BatchWriteSpansRequest{
+				Name:  "test-project",
+				Spans: missingFieldsSpan,
+			},
+			&validation.MissingFieldError{
+				Code:          codes.InvalidArgument,
+				MissingFields: []string{"Name", "StartTime"},
+			},
+		},
+		{
+			&cloudtrace.BatchWriteSpansRequest{
+				Name:  "test-project",
+				Spans: invalidTimestampSpans,
+			},
+			validation.InvalidTimestampErr,
+		},
+	}
+
+	for _, c := range cases {
+		responseSpan, err := client.BatchWriteSpans(ctx, c.in)
+		if err == nil {
+			t.Errorf("CreateSpan(%q) == %q, expected error %q",
+				c.in, responseSpan, c.want)
+		}
+
+		if err != nil && !strings.Contains(err.Error(), c.want.Error()) {
+			t.Errorf("CreateSpan(%q) returned error %q, expected error %q",
+				c.in, err.Error(), c.want)
+		}
+	}
+}
+
 func TestMockTraceServer_CreateSpan(t *testing.T) {
 	span := generateSpan("test-span-1")
 	cases := []struct {
@@ -146,6 +226,38 @@ func TestMockTraceServer_CreateSpan(t *testing.T) {
 
 		if !proto.Equal(responseSpan, c.want) {
 			t.Errorf("CreateSpan(%q) == %q, want %q", c.in, responseSpan, c.want)
+		}
+	}
+}
+
+func TestMockTraceServer_CreateSpan_Error(t *testing.T) {
+	cases := []struct {
+		in   *cloudtrace.Span
+		want error
+	}{
+		{
+			generateMissingFieldSpan("test-span-1", "SpanId", "EndTime"),
+			&validation.MissingFieldError{
+				Code:          codes.InvalidArgument,
+				MissingFields: []string{"SpanId", "EndTime"},
+			},
+		},
+		{
+			generateInvalidTimestampSpan("test-span-2"),
+			validation.InvalidTimestampErr,
+		},
+	}
+
+	for _, c := range cases {
+		responseSpan, err := client.CreateSpan(ctx, c.in)
+		if err == nil {
+			t.Errorf("CreateSpan(%q) == %q, expected error %q",
+				c.in, responseSpan, c.want)
+		}
+
+		if err != nil && !strings.Contains(err.Error(), c.want.Error()) {
+			t.Errorf("CreateSpan(%q) returned error %q, expected error %q",
+				c.in, err.Error(), c.want)
 		}
 	}
 }
