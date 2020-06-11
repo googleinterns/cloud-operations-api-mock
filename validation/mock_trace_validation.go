@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	invalidTimestampMsg   = "start time must be before end time"
-	malformedTimestampMsg = "unable to parse timestamp"
-	missingFieldMsg       = "span is missing required fields: %v"
+	InvalidTimestampMsg   = "start time must be before end time"
+	MalformedTimestampMsg = "unable to parse timestamp"
+	MissingFieldMsg       = "span is missing required fields: %v"
 )
 
 var (
@@ -50,19 +50,19 @@ func validateRequiredFields(span *cloudtrace.Span) (bool, string) {
 		}
 	}
 
-	formattedErrMsg := fmt.Sprintf(missingFieldMsg, strings.Join(missingFields, ", "))
+	formattedErrMsg := fmt.Sprintf(MissingFieldMsg, strings.Join(missingFields, ", "))
 	return len(missingFields) == 0, formattedErrMsg
 }
 
 func validateTimeStamps(span *cloudtrace.Span) (bool, string) {
 	start, err := ptypes.Timestamp(span.StartTime)
 	if err != nil {
-		return false, malformedTimestampMsg
+		return false, MalformedTimestampMsg
 	}
 	end, err := ptypes.Timestamp(span.EndTime)
 	if err != nil {
-		return false, malformedTimestampMsg
+		return false, MalformedTimestampMsg
 	}
 
-	return start.Before(end), invalidTimestampMsg
+	return start.Before(end), InvalidTimestampMsg
 }
