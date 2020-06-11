@@ -16,7 +16,10 @@ package trace
 
 import (
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/googleinterns/cloud-operations-api-mock/validation"
+
 	"golang.org/x/net/context"
+
 	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"
 )
 
@@ -25,9 +28,17 @@ type MockTraceServer struct {
 }
 
 func (s *MockTraceServer) BatchWriteSpans(ctx context.Context, req *cloudtrace.BatchWriteSpansRequest) (*empty.Empty, error) {
+	for _, span := range req.Spans {
+		if err := validation.IsSpanValid(span); err != nil {
+			return nil, err
+		}
+	}
 	return &empty.Empty{}, nil
 }
 
 func (s *MockTraceServer) CreateSpan(ctx context.Context, span *cloudtrace.Span) (*cloudtrace.Span, error) {
+	if err := validation.IsSpanValid(span); err != nil {
+		return nil, err
+	}
 	return span, nil
 }
