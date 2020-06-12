@@ -1,11 +1,9 @@
 package validation
 
 import (
-	"fmt"
 	"reflect"
 
 	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"
-	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -32,30 +30,7 @@ func IsSpanValid(span *cloudtrace.Span) error {
 }
 
 func validateRequiredFields(span *cloudtrace.Span) error {
-	spanReflect := reflect.ValueOf(span)
-	br := &errdetails.BadRequest{}
-
-	for _, field := range requiredFields {
-		if isZero := reflect.Indirect(spanReflect).FieldByName(field).IsZero(); isZero {
-			v := &errdetails.BadRequest_FieldViolation{
-				Field:       field,
-				Description: fmt.Sprintf("Span must contain requried %v field", field),
-			}
-			br.FieldViolations = append(br.FieldViolations, v)
-		}
-	}
-
-	if len(br.FieldViolations) == 0 {
-		return nil
-	} else {
-		st, err := MissingFieldError.WithDetails(br)
-
-		if err != nil {
-			panic(fmt.Sprintf("Unexpected error attaching metadata: %v", err))
-		}
-
-		return st.Err()
-	}
+	return CheckForRequiredFields(requiredFields, reflect.ValueOf(span), "Span")
 }
 
 func validateTimeStamps(span *cloudtrace.Span) error {

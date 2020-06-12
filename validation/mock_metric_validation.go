@@ -15,7 +15,6 @@ const (
 func IsValidRequest(req interface{}) error {
 	reqReflect := reflect.ValueOf(req)
 	requiredFields := []string{"Name"}
-	br := &errdetails.BadRequest{}
 	requestName := ""
 
 	switch req.(type) {
@@ -32,6 +31,12 @@ func IsValidRequest(req interface{}) error {
 		requestName = "ListMetricDescriptorsRequest"
 	}
 
+	return CheckForRequiredFields(requiredFields, reqReflect, requestName)
+}
+
+func CheckForRequiredFields(requiredFields []string, reqReflect reflect.Value, requestName string) error {
+	br := &errdetails.BadRequest{}
+
 	for _, field := range requiredFields {
 		if isZero := reflect.Indirect(reqReflect).FieldByName(field).IsZero(); isZero {
 			v := &errdetails.BadRequest_FieldViolation{
@@ -42,15 +47,15 @@ func IsValidRequest(req interface{}) error {
 		}
 	}
 
-	if len(br.FieldViolations) == 0 {
-		return nil
-	} else {
+	if len(br.FieldViolations) > 0 {
 		st, err := MissingFieldError.WithDetails(br)
 
 		if err != nil {
-			panic(fmt.Sprintf("Unexpected error attaching metadata: %v", err))
+			panic(fmt.Sprintf("unexpected error attaching metadata: %v", err))
 		}
 
 		return st.Err()
 	}
+	
+	return nil
 }
