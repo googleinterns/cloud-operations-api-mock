@@ -24,6 +24,10 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
+
+	"google.golang.org/grpc/status"
+
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/googleinterns/cloud-operations-api-mock/validation"
@@ -172,8 +176,9 @@ func TestMockTraceServer_BatchWriteSpans_Error(t *testing.T) {
 	}
 
 	cases := []struct {
-		in   *cloudtrace.BatchWriteSpansRequest
-		want error
+		in            *cloudtrace.BatchWriteSpansRequest
+		want          error
+		missingFields map[string]struct{}
 	}{
 		{
 			&cloudtrace.BatchWriteSpansRequest{
@@ -181,6 +186,10 @@ func TestMockTraceServer_BatchWriteSpans_Error(t *testing.T) {
 				Spans: missingFieldsSpan,
 			},
 			validation.MissingFieldErr.Err(),
+			map[string]struct{}{
+				"Name":      {},
+				"StartTime": {},
+			},
 		},
 		{
 			&cloudtrace.BatchWriteSpansRequest{
@@ -188,6 +197,7 @@ func TestMockTraceServer_BatchWriteSpans_Error(t *testing.T) {
 				Spans: invalidTimestampSpans,
 			},
 			validation.InvalidTimestampErr,
+			nil,
 		},
 	}
 
@@ -196,11 +206,17 @@ func TestMockTraceServer_BatchWriteSpans_Error(t *testing.T) {
 		if err == nil {
 			t.Errorf("CreateSpan(%q) == %q, expected error %q",
 				c.in, responseSpan, c.want)
+			continue
 		}
 
-		if err != nil && !strings.Contains(err.Error(), c.want.Error()) {
+		if !strings.Contains(err.Error(), c.want.Error()) {
 			t.Errorf("CreateSpan(%q) returned error %q, expected error %q",
 				c.in, err.Error(), c.want)
+		}
+		if c.missingFields != nil {
+			if valid := validateErrDetails(err, c.missingFields); !valid {
+				t.Errorf("Expected missing fields %q", c.missingFields)
+			}
 		}
 	}
 }
@@ -228,16 +244,22 @@ func TestMockTraceServer_CreateSpan(t *testing.T) {
 
 func TestMockTraceServer_CreateSpan_Error(t *testing.T) {
 	cases := []struct {
-		in   *cloudtrace.Span
-		want error
+		in            *cloudtrace.Span
+		want          error
+		missingFields map[string]struct{}
 	}{
 		{
 			generateMissingFieldSpan("test-span-1", "SpanId", "EndTime"),
 			validation.MissingFieldErr.Err(),
+			map[string]struct{}{
+				"SpanId":  {},
+				"EndTime": {},
+			},
 		},
 		{
 			generateInvalidTimestampSpan("test-span-2"),
 			validation.InvalidTimestampErr,
+			nil,
 		},
 	}
 
@@ -246,11 +268,32 @@ func TestMockTraceServer_CreateSpan_Error(t *testing.T) {
 		if err == nil {
 			t.Errorf("CreateSpan(%q) == %q, expected error %q",
 				c.in, responseSpan, c.want)
+			continue
 		}
 
-		if err != nil && !strings.Contains(err.Error(), c.want.Error()) {
+		if !strings.Contains(err.Error(), c.want.Error()) {
 			t.Errorf("CreateSpan(%q) returned error %q, expected error %q",
 				c.in, err.Error(), c.want)
 		}
+		if c.missingFields != nil {
+			if valid := validateErrDetails(err, c.missingFields); !valid {
+				t.Errorf("Expected missing fields %q", c.missingFields)
+			}
+		}
 	}
+}
+
+func validateErrDetails(err error, missingFields map[string]struct{}) bool {
+	st := status.Convert(err)
+	for _, detail := range st.Details() {
+		switch t := detail.(type) {
+		case *errdetails.BadRequest:
+			for _, violation := range t.GetFieldViolations() {
+				if _, ok := missingFields[violation.GetField()]; !ok {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }
