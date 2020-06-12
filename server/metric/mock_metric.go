@@ -30,6 +30,9 @@ type MockMetricServer struct {
 
 func (s *MockMetricServer) GetMonitoredResourceDescriptor(ctx context.Context, req *monitoring.GetMonitoredResourceDescriptorRequest,
 ) (*monitoredres.MonitoredResourceDescriptor, error) {
+	if err := validation.IsValidRequest(req); err != nil {
+		return nil, err
+	}
 	return &monitoredres.MonitoredResourceDescriptor{}, nil
 }
 
@@ -43,7 +46,7 @@ func (s *MockMetricServer) ListMonitoredResourceDescriptors(ctx context.Context,
 
 func (s *MockMetricServer) GetMetricDescriptor(ctx context.Context, req *monitoring.GetMetricDescriptorRequest,
 ) (*metric.MetricDescriptor, error) {
-	if err := validation.IsValidGetMetricDescriptorRequest(req); err != nil {
+	if err := validation.IsValidRequest(req); err != nil {
 		return nil, err
 	}
 
@@ -52,7 +55,7 @@ func (s *MockMetricServer) GetMetricDescriptor(ctx context.Context, req *monitor
 
 func (s *MockMetricServer) CreateMetricDescriptor(ctx context.Context, req *monitoring.CreateMetricDescriptorRequest,
 ) (*metric.MetricDescriptor, error) {
-	if err := validation.IsValidCreateMetricDescriptorRequest(req); err != nil {
+	if err := validation.IsValidRequest(req); err != nil {
 		return nil, err
 	}
 	return &metric.MetricDescriptor{}, nil
@@ -60,7 +63,7 @@ func (s *MockMetricServer) CreateMetricDescriptor(ctx context.Context, req *moni
 
 func (s *MockMetricServer) DeleteMetricDescriptor(ctx context.Context, req *monitoring.DeleteMetricDescriptorRequest,
 ) (*empty.Empty, error) {
-	if err := validation.IsValidDeleteMetricDescriptorRequest(req); err != nil {
+	if err := validation.IsValidRequest(req); err != nil {
 		return nil, err
 	}
 	return &empty.Empty{}, nil
@@ -76,6 +79,9 @@ func (s *MockMetricServer) ListMetricDescriptors(ctx context.Context, req *monit
 
 func (s *MockMetricServer) CreateTimeSeries(ctx context.Context, req *monitoring.CreateTimeSeriesRequest,
 ) (*empty.Empty, error) {
+	if err := validation.IsValidRequest(req); err != nil {
+		return nil, err
+	}
 	return &empty.Empty{}, nil
 }
 

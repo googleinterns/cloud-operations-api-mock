@@ -12,72 +12,31 @@ const (
 	missingFieldMsg = "%v must contain requried %v field"
 )
 
-func IsValidGetMetricDescriptorRequest(req *monitoring.GetMetricDescriptorRequest) error {
+func IsValidRequest(req interface{}) error {
 	reqReflect := reflect.ValueOf(req)
 	requiredFields := []string{"Name"}
 	br := &errdetails.BadRequest{}
+	requestName := ""
+
+	switch req.(type) {
+	case *monitoring.CreateMetricDescriptorRequest:
+		requiredFields = append(requiredFields, "MetricDescriptor")
+		requestName = "CreateMetricDescriptor"
+	case *monitoring.GetMetricDescriptorRequest:
+		requestName = "GetMetricDescriptorRequest"
+	case *monitoring.DeleteMetricDescriptorRequest:
+		requestName = "DeleteMetricDescriptorRequest"
+	case *monitoring.GetMonitoredResourceDescriptorRequest:
+		requestName = "GetMonitoredResourceDescriptorRequest"
+	case *monitoring.ListMetricDescriptorsRequest:
+		requestName = "ListMetricDescriptorsRequest"
+	}
 
 	for _, field := range requiredFields {
 		if isZero := reflect.Indirect(reqReflect).FieldByName(field).IsZero(); isZero {
 			v := &errdetails.BadRequest_FieldViolation{
 				Field:       field,
-				Description: fmt.Sprintf(missingFieldMsg, "GetMetricDescriptorRequest", field),
-			}
-			br.FieldViolations = append(br.FieldViolations, v)
-		}
-	}
-
-	if len(br.FieldViolations) == 0 {
-		return nil
-	} else {
-		st, err := MissingFieldError.WithDetails(br)
-
-		if err != nil {
-			panic(fmt.Sprintf("Unexpected error attaching metadata: %v", err))
-		}
-
-		return st.Err()
-	}
-}
-
-func IsValidDeleteMetricDescriptorRequest(req *monitoring.DeleteMetricDescriptorRequest) error {
-	reqReflect := reflect.ValueOf(req)
-	requiredFields := []string{"Name"}
-	br := &errdetails.BadRequest{}
-
-	for _, field := range requiredFields {
-		if isZero := reflect.Indirect(reqReflect).FieldByName(field).IsZero(); isZero {
-			v := &errdetails.BadRequest_FieldViolation{
-				Field:       field,
-				Description: fmt.Sprintf(missingFieldMsg, "DeleteMetricDescriptorRequest", field),
-			}
-			br.FieldViolations = append(br.FieldViolations, v)
-		}
-	}
-
-	if len(br.FieldViolations) == 0 {
-		return nil
-	} else {
-		st, err := MissingFieldError.WithDetails(br)
-
-		if err != nil {
-			panic(fmt.Sprintf("Unexpected error attaching metadata: %v", err))
-		}
-
-		return st.Err()
-	}
-}
-
-func IsValidCreateMetricDescriptorRequest(req *monitoring.CreateMetricDescriptorRequest) error {
-	reqReflect := reflect.ValueOf(req)
-	requiredFields := []string{"Name", "MetricDescriptor"}
-	br := &errdetails.BadRequest{}
-
-	for _, field := range requiredFields {
-		if isZero := reflect.Indirect(reqReflect).FieldByName(field).IsZero(); isZero {
-			v := &errdetails.BadRequest_FieldViolation{
-				Field:       field,
-				Description: fmt.Sprintf(missingFieldMsg, "CreateMetricDescriptorRequest", field),
+				Description: fmt.Sprintf(missingFieldMsg, requestName, field),
 			}
 			br.FieldViolations = append(br.FieldViolations, v)
 		}

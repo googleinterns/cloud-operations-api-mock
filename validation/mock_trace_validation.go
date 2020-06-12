@@ -15,8 +15,8 @@ import (
 var (
 	InvalidTimestampErr   = status.Error(codes.InvalidArgument, "start time must be before end time")
 	MalformedTimestampErr = status.Error(codes.InvalidArgument, "unable to parse timestamp")
-	requiredFields        = []string{"Name", "SpanId", "DisplayName", "StartTime", "EndTime"}
 	MissingFieldError     = status.New(codes.InvalidArgument, "Missing required field(s)")
+	requiredFields        = []string{"Name", "SpanId", "DisplayName", "StartTime", "EndTime"}
 )
 
 func IsSpanValid(span *cloudtrace.Span) error {
