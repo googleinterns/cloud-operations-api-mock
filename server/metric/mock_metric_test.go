@@ -22,10 +22,10 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/ptypes/empty"
+	"google.golang.org/genproto/googleapis/api/metric"
+	"google.golang.org/genproto/googleapis/api/monitoredres"
 	"google.golang.org/genproto/googleapis/monitoring/v3"
 	"google.golang.org/genproto/googleapis/rpc/status"
-	"google.golang.org/genproto/googleapis/api/monitoredres"
-	"google.golang.org/genproto/googleapis/api/metric"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/proto"
@@ -34,11 +34,11 @@ import (
 const bufSize = 1024 * 1024
 
 var (
-	client monitoring.MetricServiceClient
-	conn   *grpc.ClientConn
-	ctx    context.Context
+	client     monitoring.MetricServiceClient
+	conn       *grpc.ClientConn
+	ctx        context.Context
 	grpcServer *grpc.Server
-	lis    *bufconn.Listener
+	lis        *bufconn.Listener
 )
 
 func setup() {
@@ -82,7 +82,7 @@ func TestMockMetricServer_CreateTimeSeries(t *testing.T) {
 	in := &monitoring.CreateTimeSeriesRequest{
 		Name: "test create time series request",
 	}
-	want :=	&empty.Empty{}
+	want := &empty.Empty{}
 	response, err := client.CreateTimeSeries(ctx, in)
 	if err != nil {
 		t.Fatalf("failed to call CreateTimeSeries %v", err)
@@ -128,7 +128,6 @@ func TestMockMetricServer_GetMonitoredResourceDescriptor(t *testing.T) {
 	}
 }
 
-
 func TestMockMetricServer_ListMonitoredResourceDescriptors(t *testing.T) {
 	in := &monitoring.ListMonitoredResourceDescriptorsRequest{
 		Name: "test list monitored resource descriptors",
@@ -163,7 +162,7 @@ func TestMockMetricServer_GetMetricDescriptor(t *testing.T) {
 
 func TestMockMetricServer_CreateMetricDescriptor(t *testing.T) {
 	in := &monitoring.CreateMetricDescriptorRequest{
-		Name: "test create metric descriptor",
+		Name:             "test create metric descriptor",
 		MetricDescriptor: &metric.MetricDescriptor{},
 	}
 	want := &metric.MetricDescriptor{}

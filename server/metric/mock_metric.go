@@ -16,6 +16,7 @@ package metric
 
 import (
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/googleinterns/cloud-operations-api-mock/validation"
 	"golang.org/x/net/context"
 	"google.golang.org/genproto/googleapis/api/metric"
 	"google.golang.org/genproto/googleapis/api/monitoredres"
@@ -29,6 +30,9 @@ type MockMetricServer struct {
 
 func (s *MockMetricServer) GetMonitoredResourceDescriptor(ctx context.Context, req *monitoring.GetMonitoredResourceDescriptorRequest,
 ) (*monitoredres.MonitoredResourceDescriptor, error) {
+	if err := validation.IsValidRequest(req); err != nil {
+		return nil, err
+	}
 	return &monitoredres.MonitoredResourceDescriptor{}, nil
 }
 
@@ -42,16 +46,26 @@ func (s *MockMetricServer) ListMonitoredResourceDescriptors(ctx context.Context,
 
 func (s *MockMetricServer) GetMetricDescriptor(ctx context.Context, req *monitoring.GetMetricDescriptorRequest,
 ) (*metric.MetricDescriptor, error) {
+	if err := validation.IsValidRequest(req); err != nil {
+		return nil, err
+	}
+
 	return &metric.MetricDescriptor{}, nil
 }
 
 func (s *MockMetricServer) CreateMetricDescriptor(ctx context.Context, req *monitoring.CreateMetricDescriptorRequest,
 ) (*metric.MetricDescriptor, error) {
+	if err := validation.IsValidRequest(req); err != nil {
+		return nil, err
+	}
 	return &metric.MetricDescriptor{}, nil
 }
 
 func (s *MockMetricServer) DeleteMetricDescriptor(ctx context.Context, req *monitoring.DeleteMetricDescriptorRequest,
 ) (*empty.Empty, error) {
+	if err := validation.IsValidRequest(req); err != nil {
+		return nil, err
+	}
 	return &empty.Empty{}, nil
 }
 
@@ -65,6 +79,9 @@ func (s *MockMetricServer) ListMetricDescriptors(ctx context.Context, req *monit
 
 func (s *MockMetricServer) CreateTimeSeries(ctx context.Context, req *monitoring.CreateTimeSeriesRequest,
 ) (*empty.Empty, error) {
+	if err := validation.IsValidRequest(req); err != nil {
+		return nil, err
+	}
 	return &empty.Empty{}, nil
 }
 
