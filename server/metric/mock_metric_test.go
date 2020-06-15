@@ -20,7 +20,11 @@ import (
 	"net"
 	"os"
 	"testing"
+	"strings"
 
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
+	sts "google.golang.org/grpc/status"
+	"github.com/googleinterns/cloud-operations-api-mock/validation"
 	"github.com/golang/protobuf/ptypes/empty"
 	"google.golang.org/genproto/googleapis/api/metric"
 	"google.golang.org/genproto/googleapis/api/monitoredres"
@@ -158,6 +162,40 @@ func TestMockMetricServer_GetMetricDescriptor(t *testing.T) {
 	if !proto.Equal(response, want) {
 		t.Errorf("GetMetricDescriptor(%q) == %q, want %q", in, response, want)
 	}
+}
+
+func TestMockMetricServer_GetMetricDescriptorError(t *testing.T) {
+	in := &monitoring.GetMetricDescriptorRequest{}
+	want := validation.MissingFieldError.Err()
+	missingField := map[string]struct{}{"Name": {}}
+	response, err := client.GetMetricDescriptor(ctx, in)
+	if err == nil {
+		t.Errorf("CreateSpan(%q) == %q, expected error %q", in, response, want)
+	}
+
+	if !strings.Contains(err.Error(), want.Error()) {
+		t.Errorf("GetMetricDescriptor(%q) returned error %q, expected error %q",
+			in, err.Error(), want)
+	}
+
+	if valid := validateErrDetails(err, missingField); !valid {
+		t.Errorf("Expected missing fields %q", missingField)
+	}
+}
+
+func validateErrDetails(err error, missingFields map[string]struct{}) bool {
+	st := sts.Convert(err)
+	for _, detail := range st.Details() {
+		switch t := detail.(type) {
+		case *errdetails.BadRequest:
+			for _, violation := range t.GetFieldViolations() {
+				if _, ok := missingFields[violation.GetField()]; !ok {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }
 
 func TestMockMetricServer_CreateMetricDescriptor(t *testing.T) {
