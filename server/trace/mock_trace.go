@@ -15,6 +15,8 @@
 package trace
 
 import (
+	"sync"
+
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/googleinterns/cloud-operations-api-mock/validation"
 
@@ -25,6 +27,8 @@ import (
 
 type MockTraceServer struct {
 	cloudtrace.UnimplementedTraceServiceServer
+	uploadedSpans     []*cloudtrace.Span
+	uploadedSpansLock sync.Mutex
 }
 
 func (s *MockTraceServer) BatchWriteSpans(ctx context.Context, req *cloudtrace.BatchWriteSpansRequest) (*empty.Empty, error) {
@@ -33,6 +37,7 @@ func (s *MockTraceServer) BatchWriteSpans(ctx context.Context, req *cloudtrace.B
 			return nil, err
 		}
 	}
+	s.addSpan(req.Spans...)
 	return &empty.Empty{}, nil
 }
 
@@ -40,5 +45,12 @@ func (s *MockTraceServer) CreateSpan(ctx context.Context, span *cloudtrace.Span)
 	if err := validation.IsSpanValid(span, "CreateSpan"); err != nil {
 		return nil, err
 	}
+	s.addSpan(span)
 	return span, nil
+}
+
+func (s *MockTraceServer) addSpan(spans ...*cloudtrace.Span) {
+	s.uploadedSpansLock.Lock()
+	defer s.uploadedSpansLock.Unlock()
+	s.uploadedSpans = append(s.uploadedSpans, spans...)
 }
