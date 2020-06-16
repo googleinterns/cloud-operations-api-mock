@@ -25,9 +25,9 @@ import (
 )
 
 var (
-	InvalidTimestampError   = status.Error(codes.InvalidArgument, "start time must be before end time")
-	MalformedTimestampError = status.Error(codes.InvalidArgument, "unable to parse timestamp")
-	requiredFields          = []string{"Name", "SpanId", "DisplayName", "StartTime", "EndTime"}
+	ErrInvalidTimestamp   = status.Error(codes.InvalidArgument, "start time must be before end time")
+	ErrMalformedTimestamp = status.Error(codes.InvalidArgument, "unable to parse timestamp")
+	requiredFields        = []string{"Name", "SpanId", "DisplayName", "StartTime", "EndTime"}
 )
 
 func IsSpanValid(span *cloudtrace.Span, requestName string) error {
@@ -45,15 +45,15 @@ func IsSpanValid(span *cloudtrace.Span, requestName string) error {
 func validateTimeStamps(span *cloudtrace.Span) error {
 	start, err := ptypes.Timestamp(span.StartTime)
 	if err != nil {
-		return MalformedTimestampError
+		return ErrMalformedTimestamp
 	}
 	end, err := ptypes.Timestamp(span.EndTime)
 	if err != nil {
-		return MalformedTimestampError
+		return ErrMalformedTimestamp
 	}
 
 	if !start.Before(end) {
-		return InvalidTimestampError
+		return ErrInvalidTimestamp
 	}
 	return nil
 }

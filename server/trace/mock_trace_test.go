@@ -174,7 +174,7 @@ func TestMockTraceServer_BatchWriteSpans_MissingField(t *testing.T) {
 			Name:  "test-project",
 			Spans: missingFieldsSpan,
 		},
-		validation.MissingFieldError.Err(),
+		validation.ErrMissingField.Err(),
 		map[string]struct{}{
 			"Name":      {},
 			"StartTime": {},
@@ -206,7 +206,7 @@ func TestMockTraceServer_BatchWriteSpans_InvalidTimestamp(t *testing.T) {
 			Name:  "test-project",
 			Spans: invalidTimestampSpans,
 		},
-		validation.InvalidTimestampError,
+		validation.ErrInvalidTimestamp,
 	}
 
 	responseSpan, err := client.BatchWriteSpans(ctx, testCase.in)
@@ -247,7 +247,7 @@ func TestMockTraceServer_CreateSpan_Error(t *testing.T) {
 	}{
 		{
 			generateMissingFieldSpan("test-span-1", "SpanId", "EndTime"),
-			validation.MissingFieldError.Err(),
+			validation.ErrMissingField.Err(),
 			map[string]struct{}{
 				"SpanId":  {},
 				"EndTime": {},
@@ -255,7 +255,7 @@ func TestMockTraceServer_CreateSpan_Error(t *testing.T) {
 		},
 		{
 			generateInvalidTimestampSpan("test-span-2"),
-			validation.InvalidTimestampError,
+			validation.ErrInvalidTimestamp,
 			nil,
 		},
 	}
@@ -283,8 +283,7 @@ func TestMockTraceServer_CreateSpan_Error(t *testing.T) {
 func validateErrDetails(err error, missingFields map[string]struct{}) bool {
 	st := status.Convert(err)
 	for _, detail := range st.Details() {
-		switch t := detail.(type) {
-		case *errdetails.BadRequest:
+		if t, ok := detail.(*errdetails.BadRequest); ok {
 			for _, violation := range t.GetFieldViolations() {
 				if _, ok := missingFields[violation.GetField()]; !ok {
 					return false

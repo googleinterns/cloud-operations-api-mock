@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	MissingFieldError = status.New(codes.InvalidArgument, "missing required field(s)")
+	ErrMissingField = status.New(codes.InvalidArgument, "missing required field(s)")
 )
 
 const (
@@ -35,7 +35,7 @@ func CheckForRequiredFields(requiredFields []string, reqReflect reflect.Value, r
 	br := &errdetails.BadRequest{}
 
 	for _, field := range requiredFields {
-		if isZero := reflect.Indirect(reqReflect).FieldByName(field).IsZero(); isZero {
+		if reflect.Indirect(reqReflect).FieldByName(field).IsZero() {
 			v := &errdetails.BadRequest_FieldViolation{
 				Field:       field,
 				Description: fmt.Sprintf(missingFieldMsg, requestName, field),
@@ -45,7 +45,7 @@ func CheckForRequiredFields(requiredFields []string, reqReflect reflect.Value, r
 	}
 
 	if len(br.FieldViolations) > 0 {
-		st, err := MissingFieldError.WithDetails(br)
+		st, err := ErrMissingField.WithDetails(br)
 		if err != nil {
 			panic(fmt.Sprintf("unexpected error attaching metadata: %v", err))
 		}
