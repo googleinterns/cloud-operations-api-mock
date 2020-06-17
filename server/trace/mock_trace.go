@@ -29,7 +29,7 @@ type MockTraceServer struct {
 
 func (s *MockTraceServer) BatchWriteSpans(ctx context.Context, req *cloudtrace.BatchWriteSpansRequest) (*empty.Empty, error) {
 	for _, span := range req.Spans {
-		if err := validation.IsSpanValid(span); err != nil {
+		if err := validation.IsSpanValid(span, "BatchWriteSpans"); err != nil {
 			return nil, err
 		}
 	}
@@ -37,7 +37,7 @@ func (s *MockTraceServer) BatchWriteSpans(ctx context.Context, req *cloudtrace.B
 }
 
 func (s *MockTraceServer) CreateSpan(ctx context.Context, span *cloudtrace.Span) (*cloudtrace.Span, error) {
-	if err := validation.IsSpanValid(span); err != nil {
+	if err := validation.IsSpanValid(span, "CreateSpan"); err != nil {
 		return nil, err
 	}
 	return span, nil
