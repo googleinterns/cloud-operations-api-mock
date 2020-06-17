@@ -53,3 +53,17 @@ func CheckForRequiredFields(requiredFields []string, reqReflect reflect.Value, r
 	}
 	return nil
 }
+
+func ValidateErrDetails(err error, missingFields map[string]struct{}) bool {
+	st := status.Convert(err)
+	for _, detail := range st.Details() {
+		if t, ok := detail.(*errdetails.BadRequest); ok {
+			for _, violation := range t.GetFieldViolations() {
+				if _, ok := missingFields[violation.GetField()]; !ok {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}

@@ -38,6 +38,9 @@ func (s *MockMetricServer) GetMonitoredResourceDescriptor(ctx context.Context, r
 
 func (s *MockMetricServer) ListMonitoredResourceDescriptors(ctx context.Context, req *monitoring.ListMonitoredResourceDescriptorsRequest,
 ) (*monitoring.ListMonitoredResourceDescriptorsResponse, error) {
+	if err := validation.IsValidRequest(req); err != nil {
+		return nil, err
+	}
 	return &monitoring.ListMonitoredResourceDescriptorsResponse{
 		ResourceDescriptors: []*monitoredres.MonitoredResourceDescriptor{},
 		NextPageToken:       "",
@@ -71,6 +74,9 @@ func (s *MockMetricServer) DeleteMetricDescriptor(ctx context.Context, req *moni
 
 func (s *MockMetricServer) ListMetricDescriptors(ctx context.Context, req *monitoring.ListMetricDescriptorsRequest,
 ) (*monitoring.ListMetricDescriptorsResponse, error) {
+	if err := validation.IsValidRequest(req); err != nil {
+		return nil, err
+	}
 	return &monitoring.ListMetricDescriptorsResponse{
 		MetricDescriptors: []*metric.MetricDescriptor{},
 		NextPageToken:     "",
@@ -87,6 +93,9 @@ func (s *MockMetricServer) CreateTimeSeries(ctx context.Context, req *monitoring
 
 func (s *MockMetricServer) ListTimeSeries(ctx context.Context, req *monitoring.ListTimeSeriesRequest,
 ) (*monitoring.ListTimeSeriesResponse, error) {
+	if err := validation.IsValidRequest(req); err != nil {
+		return nil, err
+	}
 	return &monitoring.ListTimeSeriesResponse{
 		TimeSeries:      []*monitoring.TimeSeries{},
 		NextPageToken:   "",
