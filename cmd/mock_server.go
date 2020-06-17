@@ -16,8 +16,15 @@ package main
 
 import (
 	"flag"
+	"log"
+	"net"
 
-	"github.com/googleinterns/cloud-operations-api-mock/cloudmock"
+	"github.com/googleinterns/cloud-operations-api-mock/server/metric"
+	"github.com/googleinterns/cloud-operations-api-mock/server/trace"
+
+	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"
+	"google.golang.org/genproto/googleapis/monitoring/v3"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -31,5 +38,22 @@ var (
 
 func main() {
 	flag.Parse()
-	cloudmock.StartMockServer(*address)
+	startStandaloneServer()
+}
+
+func startStandaloneServer() {
+	lis, err := net.Listen("tcp", *address)
+	if err != nil {
+		log.Fatalf("mock server failed to listen: %v", err)
+	}
+
+	grpcServer := grpc.NewServer()
+	cloudtrace.RegisterTraceServiceServer(grpcServer, &trace.MockTraceServer{})
+	monitoring.RegisterMetricServiceServer(grpcServer, &metric.MockMetricServer{})
+
+	log.Printf("Listening on %s\n", lis.Addr().String())
+
+	if err := grpcServer.Serve(lis); err != nil {
+		log.Fatalf("mock server failed to serve: %v", err)
+	}
 }

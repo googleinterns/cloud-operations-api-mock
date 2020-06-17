@@ -26,8 +26,15 @@ import (
 	"google.golang.org/grpc"
 )
 
-func StartMockServer(address string) *grpc.Server {
-	lis, err := net.Listen("tcp", address)
+type CloudMock struct {
+	conn                *grpc.ClientConn
+	grpcServer          *grpc.Server
+	TraceServiceClient  cloudtrace.TraceServiceClient
+	MetricServiceClient monitoring.MetricServiceClient
+}
+
+func startMockServer() (string, *grpc.Server) {
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		log.Fatalf("mock server failed to listen: %v", err)
 	}
@@ -36,7 +43,7 @@ func StartMockServer(address string) *grpc.Server {
 	cloudtrace.RegisterTraceServiceServer(grpcServer, &trace.MockTraceServer{})
 	monitoring.RegisterMetricServiceServer(grpcServer, &metric.MockMetricServer{})
 
-	log.Printf("Listening on %s\n", address)
+	log.Printf("Listening on %s\n", lis.Addr().String())
 
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
@@ -44,14 +51,12 @@ func StartMockServer(address string) *grpc.Server {
 		}
 	}()
 
-	return grpcServer
+	return lis.Addr().String(), grpcServer
 }
 
-func ShutdownMockServer(grpcServer *grpc.Server) {
-	grpcServer.GracefulStop()
-}
+func NewCloudMock() *CloudMock {
+	address, grpcServer := startMockServer()
 
-func StartMockClients(address string) (*grpc.ClientConn, cloudtrace.TraceServiceClient, monitoring.MetricServiceClient) {
 	conn, err := grpc.Dial(address, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %s", err)
@@ -59,11 +64,17 @@ func StartMockClients(address string) (*grpc.ClientConn, cloudtrace.TraceService
 
 	traceClient := cloudtrace.NewTraceServiceClient(conn)
 	metricClient := monitoring.NewMetricServiceClient(conn)
-	return conn, traceClient, metricClient
+	return &CloudMock{
+		conn,
+		grpcServer,
+		traceClient,
+		metricClient,
+	}
 }
 
-func ShutdownMockClients(conn *grpc.ClientConn) {
-	if err := conn.Close(); err != nil {
+func (mock *CloudMock) Shutdown() {
+	if err := mock.conn.Close(); err != nil {
 		log.Fatalf("failed to close connection: %s", err)
 	}
+	mock.grpcServer.GracefulStop()
 }
