@@ -47,7 +47,7 @@ func setup() {
 	// Setup the in-memory server.
 	lis = bufconn.Listen(bufSize)
 	grpcServer = grpc.NewServer()
-	cloudtrace.RegisterTraceServiceServer(grpcServer, &MockTraceServer{})
+	cloudtrace.RegisterTraceServiceServer(grpcServer, NewMockTraceServer())
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
 			log.Fatalf("server exited with error: %v", err)
@@ -150,8 +150,8 @@ func TestMockTraceServer_BatchWriteSpans_MissingField(t *testing.T) {
 	defer tearDown()
 
 	missingFieldsSpan := []*cloudtrace.Span{
-		generateMissingFieldSpan("test-span-1", "Name", "StartTime"),
-		generateMissingFieldSpan("test-span-2"),
+		generateMissingFieldSpan("test-span-4", "Name", "StartTime"),
+		generateMissingFieldSpan("test-span-5"),
 	}
 	in := &cloudtrace.BatchWriteSpansRequest{
 		Name:  "test-project",
@@ -208,7 +208,6 @@ func TestMockTraceServer_CreateSpan(t *testing.T) {
 
 	span := generateSpan("test-span-1")
 	in, want := span, span
-
 	responseSpan, err := client.CreateSpan(ctx, in)
 	if err != nil {
 		t.Fatalf("failed to call CreateSpan: %v", err)

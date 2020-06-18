@@ -27,30 +27,31 @@ import (
 
 type MockTraceServer struct {
 	cloudtrace.UnimplementedTraceServiceServer
-	uploadedSpans     []*cloudtrace.Span
+	uploadedSpans     map[string]*cloudtrace.Span
 	uploadedSpansLock sync.Mutex
 }
 
+func NewMockTraceServer() *MockTraceServer {
+	uploadedSpans := make(map[string]*cloudtrace.Span)
+	return &MockTraceServer{uploadedSpans: uploadedSpans}
+}
+
 func (s *MockTraceServer) BatchWriteSpans(ctx context.Context, req *cloudtrace.BatchWriteSpansRequest) (*empty.Empty, error) {
-	for _, span := range req.Spans {
-		if err := validation.IsSpanValid(span, "BatchWriteSpans"); err != nil {
-			return nil, err
-		}
+	if err := validation.ValidateSpans("BatchWriteSpans", req.Spans...); err != nil {
+		return nil, err
 	}
-	s.addSpan(req.Spans...)
+	if err := validation.AddSpans(s.uploadedSpans, &s.uploadedSpansLock, req.Spans...); err != nil {
+		return nil, err
+	}
 	return &empty.Empty{}, nil
 }
 
 func (s *MockTraceServer) CreateSpan(ctx context.Context, span *cloudtrace.Span) (*cloudtrace.Span, error) {
-	if err := validation.IsSpanValid(span, "CreateSpan"); err != nil {
+	if err := validation.ValidateSpans("CreateSpan", span); err != nil {
 		return nil, err
 	}
-	s.addSpan(span)
+	if err := validation.AddSpans(s.uploadedSpans, &s.uploadedSpansLock, span); err != nil {
+		return nil, err
+	}
 	return span, nil
-}
-
-func (s *MockTraceServer) addSpan(spans ...*cloudtrace.Span) {
-	s.uploadedSpansLock.Lock()
-	defer s.uploadedSpansLock.Unlock()
-	s.uploadedSpans = append(s.uploadedSpans, spans...)
 }
