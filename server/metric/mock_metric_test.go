@@ -98,7 +98,10 @@ func TestMockMetricServer_CreateTimeSeries(t *testing.T) {
 
 func TestMockMetricServer_ListTimeSeries(t *testing.T) {
 	in := &monitoring.ListTimeSeriesRequest{
-		Name: "test list time series request",
+		Name:     "test list time series request",
+		Filter:   "test filter",
+		Interval: &monitoring.TimeInterval{},
+		View:     monitoring.ListTimeSeriesRequest_HEADERS,
 	}
 	want := &monitoring.ListTimeSeriesResponse{
 		TimeSeries:      []*monitoring.TimeSeries{},
@@ -329,7 +332,7 @@ func TestMockMetricServer_ListMonitoredResourceDescriptorsError(t *testing.T) {
 func TestMockMetricServer_ListTimeSeriesError(t *testing.T) {
 	in := &monitoring.ListTimeSeriesRequest{}
 	want := validation.ErrMissingField.Err()
-	missingFields := map[string]struct{}{"Name": {}, "Filter": {}}
+	missingFields := map[string]struct{}{"Name": {}, "Filter": {}, "View": {}, "Interval": {}}
 	response, err := client.ListTimeSeries(ctx, in)
 	if err == nil {
 		t.Errorf("ListTimeSeries(%q) == %q, expected error %q", in, response, want)
