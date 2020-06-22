@@ -18,6 +18,9 @@ import (
 	"flag"
 	"log"
 	"net"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/googleinterns/cloud-operations-api-mock/server/metric"
 	"github.com/googleinterns/cloud-operations-api-mock/server/trace"
@@ -52,6 +55,13 @@ func startStandaloneServer() {
 	monitoring.RegisterMetricServiceServer(grpcServer, &metric.MockMetricServer{})
 
 	log.Printf("Listening on %s\n", lis.Addr().String())
+
+	sig := make(chan os.Signal)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sig
+		grpcServer.GracefulStop()
+	}()
 
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("mock server failed to serve: %v", err)
