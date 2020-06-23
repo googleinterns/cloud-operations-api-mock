@@ -15,11 +15,14 @@
 package validation
 
 import (
+	"fmt"
 	"reflect"
+	"sync"
 
 	"github.com/golang/protobuf/ptypes"
 
 	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -27,18 +30,20 @@ import (
 var (
 	ErrInvalidTimestamp   = status.Error(codes.InvalidArgument, "start time must be before end time")
 	ErrMalformedTimestamp = status.Error(codes.InvalidArgument, "unable to parse timestamp")
+	ErrDuplicateSpanName  = status.New(codes.AlreadyExists, "duplicate span name")
 	requiredFields        = []string{"Name", "SpanId", "DisplayName", "StartTime", "EndTime"}
 )
 
-func IsSpanValid(span *cloudtrace.Span, requestName string) error {
-	if err := CheckForRequiredFields(requiredFields, reflect.ValueOf(span), requestName); err != nil {
-		return err
-	}
+func ValidateSpans(requestName string, spans ...*cloudtrace.Span) error {
+	for _, span := range spans {
+		if err := CheckForRequiredFields(requiredFields, reflect.ValueOf(span), requestName); err != nil {
+			return err
+		}
 
-	if err := validateTimeStamps(span); err != nil {
-		return err
+		if err := validateTimeStamps(span); err != nil {
+			return err
+		}
 	}
-
 	return nil
 }
 
@@ -56,4 +61,35 @@ func validateTimeStamps(span *cloudtrace.Span) error {
 		return ErrInvalidTimestamp
 	}
 	return nil
+}
+
+func AddSpans(uploadedSpans map[string]*cloudtrace.Span, lock *sync.Mutex, spans ...*cloudtrace.Span) error {
+	br := &errdetails.ErrorInfo{}
+
+	lock.Lock()
+	defer lock.Unlock()
+	for _, span := range spans {
+		if _, ok := uploadedSpans[span.Name]; ok {
+			br.Reason = span.Name
+			st, err := ErrDuplicateSpanName.WithDetails(br)
+			if err != nil {
+				panic(fmt.Sprintf("unexpected error attaching metadata: %v", err))
+			}
+			return st.Err()
+		}
+		uploadedSpans[span.Name] = span
+	}
+	return nil
+}
+
+func ValidateDuplicateSpanNames(err error, duplicateName string) bool {
+	st := status.Convert(err)
+	for _, detail := range st.Details() {
+		if t, ok := detail.(*errdetails.ErrorInfo); ok {
+			if t.GetReason() != duplicateName {
+				return false
+			}
+		}
+	}
+	return true
 }
