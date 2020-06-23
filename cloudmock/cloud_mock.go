@@ -12,15 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package cloudmock
 
 import (
-	"flag"
 	"log"
 	"net"
-	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/googleinterns/cloud-operations-api-mock/server/metric"
 	"github.com/googleinterns/cloud-operations-api-mock/server/trace"
@@ -30,22 +26,15 @@ import (
 	"google.golang.org/grpc"
 )
 
-const (
-	defaultAddress = "localhost:8080"
-)
-
-var (
-	address = flag.String("address", defaultAddress,
-		"The address to run the server on, of the form <host>:<port>.")
-)
-
-func main() {
-	flag.Parse()
-	startStandaloneServer()
+type CloudMock struct {
+	conn                *grpc.ClientConn
+	grpcServer          *grpc.Server
+	TraceServiceClient  cloudtrace.TraceServiceClient
+	MetricServiceClient monitoring.MetricServiceClient
 }
 
-func startStandaloneServer() {
-	lis, err := net.Listen("tcp", *address)
+func startMockServer() (string, *grpc.Server) {
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		log.Fatalf("mock server failed to listen: %v", err)
 	}
@@ -56,14 +45,36 @@ func startStandaloneServer() {
 
 	log.Printf("Listening on %s\n", lis.Addr().String())
 
-	sig := make(chan os.Signal)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	go func() {
-		<-sig
-		grpcServer.GracefulStop()
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Fatalf("mock server failed to serve: %v", err)
+		}
 	}()
 
-	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatalf("mock server failed to serve: %v", err)
+	return lis.Addr().String(), grpcServer
+}
+
+func NewCloudMock() *CloudMock {
+	address, grpcServer := startMockServer()
+
+	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("did not connect: %s", err)
 	}
+
+	traceClient := cloudtrace.NewTraceServiceClient(conn)
+	metricClient := monitoring.NewMetricServiceClient(conn)
+	return &CloudMock{
+		conn,
+		grpcServer,
+		traceClient,
+		metricClient,
+	}
+}
+
+func (mock *CloudMock) Shutdown() {
+	if err := mock.conn.Close(); err != nil {
+		log.Fatalf("failed to close connection: %s", err)
+	}
+	mock.grpcServer.GracefulStop()
 }
