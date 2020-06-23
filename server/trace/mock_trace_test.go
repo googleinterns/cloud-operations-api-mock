@@ -150,8 +150,8 @@ func TestMockTraceServer_BatchWriteSpans_MissingField(t *testing.T) {
 	defer tearDown()
 
 	missingFieldsSpan := []*cloudtrace.Span{
-		generateMissingFieldSpan("test-span-4", "Name", "StartTime"),
-		generateMissingFieldSpan("test-span-5"),
+		generateMissingFieldSpan("test-span-1", "Name", "StartTime"),
+		generateMissingFieldSpan("test-span-2"),
 	}
 	in := &cloudtrace.BatchWriteSpansRequest{
 		Name:  "test-project",
@@ -168,7 +168,6 @@ func TestMockTraceServer_BatchWriteSpans_MissingField(t *testing.T) {
 		t.Errorf("BatchWriteSpans(%v) == %v, expected error %v",
 			in, responseSpan, want)
 	}
-
 
 	if valid := validation.ValidateErrDetails(err, missingFields); !valid {
 		t.Errorf("BatchWriteSpans(%v) expected missing fields %v", in, missingFields)
@@ -202,12 +201,40 @@ func TestMockTraceServer_BatchWriteSpans_InvalidTimestamp(t *testing.T) {
 	}
 }
 
+func TestMockTraceServer_BatchWriteSpans_DuplicateName(t *testing.T) {
+	setup()
+	defer tearDown()
+
+	const duplicateSpanName = "test-span-1"
+	spans := []*cloudtrace.Span{
+		generateSpan(duplicateSpanName),
+		generateSpan(duplicateSpanName),
+	}
+	in := &cloudtrace.BatchWriteSpansRequest{Name: "test-project", Spans: spans}
+	want := validation.ErrDuplicateSpanName
+
+	responseSpan, err := client.BatchWriteSpans(ctx, in)
+	if err == nil {
+		t.Errorf("BatchWriteSpans(%q) == %q, expected error %q",
+			in, responseSpan, want.Err())
+	} else {
+		if !strings.Contains(err.Error(), want.Err().Error()) {
+			t.Errorf("BatchWriteSpans(%q) returned error %q, expected error %q",
+				in, err.Error(), want.Err())
+		}
+		if valid := validation.ValidateDuplicateSpanNames(err, duplicateSpanName); !valid {
+			t.Errorf("expected duplicate spanName: %q", duplicateSpanName)
+		}
+	}
+}
+
 func TestMockTraceServer_CreateSpan(t *testing.T) {
 	setup()
 	defer tearDown()
 
 	span := generateSpan("test-span-1")
 	in, want := span, span
+
 	responseSpan, err := client.CreateSpan(ctx, in)
 	if err != nil {
 		t.Fatalf("failed to call CreateSpan: %v", err)

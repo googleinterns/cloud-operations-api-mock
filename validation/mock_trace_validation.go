@@ -27,10 +27,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const (
-	duplicateSpanNameMsg = "duplicate span name: %v"
-)
-
 var (
 	ErrInvalidTimestamp   = status.Error(codes.InvalidArgument, "start time must be before end time")
 	ErrMalformedTimestamp = status.Error(codes.InvalidArgument, "unable to parse timestamp")
@@ -74,7 +70,7 @@ func AddSpans(uploadedSpans map[string]*cloudtrace.Span, lock *sync.Mutex, spans
 	defer lock.Unlock()
 	for _, span := range spans {
 		if _, ok := uploadedSpans[span.Name]; ok {
-			br.Reason = fmt.Sprintf(duplicateSpanNameMsg, span.Name)
+			br.Reason = span.Name
 			st, err := ErrDuplicateSpanName.WithDetails(br)
 			if err != nil {
 				panic(fmt.Sprintf("unexpected error attaching metadata: %v", err))
@@ -84,4 +80,16 @@ func AddSpans(uploadedSpans map[string]*cloudtrace.Span, lock *sync.Mutex, spans
 		uploadedSpans[span.Name] = span
 	}
 	return nil
+}
+
+func ValidateDuplicateSpanNames(err error, duplicateName string) bool {
+	st := status.Convert(err)
+	for _, detail := range st.Details() {
+		if t, ok := detail.(*errdetails.ErrorInfo); ok {
+			if t.GetReason() != duplicateName {
+				return false
+			}
+		}
+	}
+	return true
 }
