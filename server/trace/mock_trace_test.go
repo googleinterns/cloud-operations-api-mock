@@ -28,9 +28,7 @@ import (
 	"github.com/googleinterns/cloud-operations-api-mock/validation"
 
 	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"
-	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/proto"
 )
@@ -171,7 +169,8 @@ func TestMockTraceServer_BatchWriteSpans_MissingField(t *testing.T) {
 			in, responseSpan, want)
 	}
 
-	if valid := validateErrDetails(err, missingFields); !valid {
+
+	if valid := validation.ValidateErrDetails(err, missingFields); !valid {
 		t.Errorf("BatchWriteSpans(%v) expected missing fields %v", in, missingFields)
 	}
 }
@@ -238,7 +237,7 @@ func TestMockTraceServer_CreateSpan_MissingFields(t *testing.T) {
 			in, responseSpan, want)
 	}
 
-	if valid := validateErrDetails(err, missingFields); !valid {
+	if valid := validation.ValidateErrDetails(err, missingFields); !valid {
 		t.Errorf("CreateSpan(%v) expected missing fields %v", in, missingFields)
 	}
 }
@@ -260,18 +259,4 @@ func TestMockTraceServer_CreateSpan_InvalidTimestamp(t *testing.T) {
 				in, err.Error(), want)
 		}
 	}
-}
-
-func validateErrDetails(err error, missingFields map[string]struct{}) bool {
-	st := status.Convert(err)
-	for _, detail := range st.Details() {
-		if t, ok := detail.(*errdetails.BadRequest); ok {
-			for _, violation := range t.GetFieldViolations() {
-				if _, ok := missingFields[violation.GetField()]; !ok {
-					return false
-				}
-			}
-		}
-	}
-	return true
 }

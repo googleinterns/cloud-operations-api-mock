@@ -28,7 +28,7 @@ func IsValidRequest(req interface{}) error {
 	switch req.(type) {
 	case *monitoring.CreateMetricDescriptorRequest:
 		requiredFields = append(requiredFields, "MetricDescriptor")
-		requestName = "CreateMetricDescriptor"
+		requestName = "CreateMetricDescriptorRequest"
 	case *monitoring.GetMetricDescriptorRequest:
 		requestName = "GetMetricDescriptorRequest"
 	case *monitoring.DeleteMetricDescriptorRequest:
@@ -37,6 +37,13 @@ func IsValidRequest(req interface{}) error {
 		requestName = "GetMonitoredResourceDescriptorRequest"
 	case *monitoring.ListMetricDescriptorsRequest:
 		requestName = "ListMetricDescriptorsRequest"
+	case *monitoring.ListMonitoredResourceDescriptorsRequest:
+		requestName = "ListMonitoredResourceDescriptorsRequest"
+	case *monitoring.ListTimeSeriesRequest:
+		requestName = "ListTimeSeriesRequest"
+	case *monitoring.CreateTimeSeriesRequest:
+		requiredFields = append(requiredFields, "TimeSeries")
+		requestName = "CreateTimeSeriesRequest"
 	}
 
 	return CheckForRequiredFields(requiredFields, reqReflect, requestName)
