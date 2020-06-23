@@ -138,6 +138,7 @@ func TestMockTraceServer_BatchWriteSpans(t *testing.T) {
 	response, err := client.BatchWriteSpans(ctx, in)
 	if err != nil {
 		t.Fatalf("failed to call BatchWriteSpans: %v", err)
+		return
 	}
 
 	if !proto.Equal(response, want) {
@@ -167,6 +168,7 @@ func TestMockTraceServer_BatchWriteSpans_MissingField(t *testing.T) {
 	if err == nil {
 		t.Errorf("BatchWriteSpans(%v) == %v, expected error %v",
 			in, responseSpan, want)
+		return
 	}
 
 	if valid := validation.ValidateErrDetails(err, missingFields); !valid {
@@ -193,11 +195,12 @@ func TestMockTraceServer_BatchWriteSpans_InvalidTimestamp(t *testing.T) {
 	if err == nil {
 		t.Errorf("BatchWriteSpans(%v) == %v, expected error %v",
 			in, responseSpan, want)
-	} else {
-		if !strings.Contains(err.Error(), want.Error()) {
-			t.Errorf("BatchWriteSpans(%v) returned error %v, expected error %v",
-				in, err.Error(), want)
-		}
+		return
+	}
+
+	if !strings.Contains(err.Error(), want.Error()) {
+		t.Errorf("BatchWriteSpans(%v) returned error %v, expected error %v",
+			in, err.Error(), want)
 	}
 }
 
@@ -215,16 +218,13 @@ func TestMockTraceServer_BatchWriteSpans_DuplicateName(t *testing.T) {
 
 	responseSpan, err := client.BatchWriteSpans(ctx, in)
 	if err == nil {
-		t.Errorf("BatchWriteSpans(%q) == %q, expected error %q",
+		t.Errorf("BatchWriteSpans(%v) == %v, expected error %v",
 			in, responseSpan, want.Err())
-	} else {
-		if !strings.Contains(err.Error(), want.Err().Error()) {
-			t.Errorf("BatchWriteSpans(%q) returned error %q, expected error %q",
-				in, err.Error(), want.Err())
-		}
-		if valid := validation.ValidateDuplicateSpanNames(err, duplicateSpanName); !valid {
-			t.Errorf("expected duplicate spanName: %q", duplicateSpanName)
-		}
+		return
+	}
+
+	if valid := validation.ValidateDuplicateSpanNames(err, duplicateSpanName); !valid {
+		t.Errorf("expected duplicate spanName: %v", duplicateSpanName)
 	}
 }
 
@@ -238,6 +238,7 @@ func TestMockTraceServer_CreateSpan(t *testing.T) {
 	responseSpan, err := client.CreateSpan(ctx, in)
 	if err != nil {
 		t.Fatalf("failed to call CreateSpan: %v", err)
+		return
 	}
 
 	if !proto.Equal(responseSpan, want) {
@@ -261,6 +262,7 @@ func TestMockTraceServer_CreateSpan_MissingFields(t *testing.T) {
 	if err == nil {
 		t.Errorf("CreateSpan(%v) == %v, expected error %v",
 			in, responseSpan, want)
+		return
 	}
 
 	if valid := validation.ValidateErrDetails(err, missingFields); !valid {
@@ -279,10 +281,11 @@ func TestMockTraceServer_CreateSpan_InvalidTimestamp(t *testing.T) {
 	if err == nil {
 		t.Errorf("CreateSpan(%v) == %v, expected error %v",
 			in, responseSpan, want)
-	} else {
-		if !strings.Contains(err.Error(), want.Error()) {
-			t.Errorf("CreateSpan(%v) returned error %v, expected error %v",
-				in, err.Error(), want)
-		}
+		return
+	}
+
+	if !strings.Contains(err.Error(), want.Error()) {
+		t.Errorf("CreateSpan(%v) returned error %v, expected error %v",
+			in, err.Error(), want)
 	}
 }
