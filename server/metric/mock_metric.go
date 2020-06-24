@@ -16,7 +16,7 @@ package metric
 
 import (
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/googleinterns/cloud-operations-api-mock/validation"
+	"github.com/googleinterns/cloud-operations-api-mock/internal/validation"
 	"golang.org/x/net/context"
 	"google.golang.org/genproto/googleapis/api/metric"
 	"google.golang.org/genproto/googleapis/api/monitoredres"

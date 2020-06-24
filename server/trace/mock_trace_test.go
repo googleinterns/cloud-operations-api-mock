@@ -25,7 +25,7 @@ import (
 
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/googleinterns/cloud-operations-api-mock/validation"
+	"github.com/googleinterns/cloud-operations-api-mock/internal/validation"
 
 	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"
 	"google.golang.org/grpc"
