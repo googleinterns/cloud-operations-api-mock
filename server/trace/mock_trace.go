@@ -18,6 +18,7 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/ptypes/empty"
+	mocktrace "github.com/googleinterns/cloud-operations-api-mock/api"
 	"github.com/googleinterns/cloud-operations-api-mock/internal/validation"
 
 	"golang.org/x/net/context"
@@ -27,6 +28,7 @@ import (
 
 type MockTraceServer struct {
 	cloudtrace.UnimplementedTraceServiceServer
+	mocktrace.UnimplementedMockTraceServiceServer
 	uploadedSpans     map[string]*cloudtrace.Span
 	uploadedSpansLock sync.Mutex
 }
@@ -54,4 +56,12 @@ func (s *MockTraceServer) CreateSpan(ctx context.Context, span *cloudtrace.Span)
 		return nil, err
 	}
 	return span, nil
+}
+
+func (s *MockTraceServer) GetNumSpans(ctx context.Context, req *empty.Empty) (*mocktrace.GetNumSpansResponse, error) {
+	s.uploadedSpansLock.Lock()
+	defer s.uploadedSpansLock.Unlock()
+	return &mocktrace.GetNumSpansResponse{
+		NumSpans: int32(len(s.uploadedSpans)),
+	}, nil
 }

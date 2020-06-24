@@ -18,6 +18,7 @@ import (
 	"log"
 	"net"
 
+	mocktrace "github.com/googleinterns/cloud-operations-api-mock/api"
 	"github.com/googleinterns/cloud-operations-api-mock/server/metric"
 	"github.com/googleinterns/cloud-operations-api-mock/server/trace"
 
@@ -27,10 +28,11 @@ import (
 )
 
 type CloudMock struct {
-	conn                *grpc.ClientConn
-	grpcServer          *grpc.Server
-	TraceServiceClient  cloudtrace.TraceServiceClient
-	MetricServiceClient monitoring.MetricServiceClient
+	conn                   *grpc.ClientConn
+	grpcServer             *grpc.Server
+	TraceServiceClient     cloudtrace.TraceServiceClient
+	MockTraceServiceClient mocktrace.MockTraceServiceClient
+	MetricServiceClient    monitoring.MetricServiceClient
 }
 
 func startMockServer() (string, *grpc.Server) {
@@ -63,11 +65,13 @@ func NewCloudMock() *CloudMock {
 	}
 
 	traceClient := cloudtrace.NewTraceServiceClient(conn)
+	mockTraceClient := mocktrace.NewMockTraceServiceClient(conn)
 	metricClient := monitoring.NewMetricServiceClient(conn)
 	return &CloudMock{
 		conn,
 		grpcServer,
 		traceClient,
+		mockTraceClient,
 		metricClient,
 	}
 }
