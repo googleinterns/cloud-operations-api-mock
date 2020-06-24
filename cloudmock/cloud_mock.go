@@ -76,6 +76,10 @@ func NewCloudMock() *CloudMock {
 	}
 }
 
+func (mock *CloudMock) ClientConn() *grpc.ClientConn {
+	return mock.conn
+}
+
 func (mock *CloudMock) Shutdown() {
 	if err := mock.conn.Close(); err != nil {
 		log.Fatalf("failed to close connection: %s", err)

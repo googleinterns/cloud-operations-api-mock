@@ -20,6 +20,7 @@ import (
 	"net"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -300,18 +301,37 @@ func TestMockTraceServer_GetNumSpans(t *testing.T) {
 	setup()
 	defer tearDown()
 
-	const expectedNumSpans = 3
-	spans := []*cloudtrace.Span{
+	var wg sync.WaitGroup
+	const expectedNumSpans = 6
+	spans1 := []*cloudtrace.Span{
 		generateSpan("test-span-1"),
 		generateSpan("test-span-2"),
 		generateSpan("test-span-3"),
 	}
-	in := &cloudtrace.BatchWriteSpansRequest{Name: "test-project", Spans: spans}
-	_, err := traceClient.BatchWriteSpans(ctx, in)
-	if err != nil {
-		t.Fatalf("failed to call BatchWriteSpans: %v", err)
-		return
+
+	spans2 := []*cloudtrace.Span{
+		generateSpan("test-span-4"),
+		generateSpan("test-span-5"),
+		generateSpan("test-span-6"),
 	}
+
+	go func() {
+		wg.Add(1)
+		defer wg.Done()
+		_, err := traceClient.BatchWriteSpans(ctx, &cloudtrace.BatchWriteSpansRequest{
+			Name:  "test-project",
+			Spans: spans1,
+		})
+		if err != nil {
+			t.Fatalf("failed to call BatchWriteSpans: %v", err)
+		}
+	}()
+
+	_, err := traceClient.BatchWriteSpans(ctx, &cloudtrace.BatchWriteSpansRequest{
+		Name:  "test-project",
+		Spans: spans2,
+	})
+	wg.Wait()
 
 	numSpansResp, err := mockClient.GetNumSpans(ctx, &empty.Empty{})
 	if err != nil {
