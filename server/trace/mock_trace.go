@@ -18,7 +18,7 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/googleinterns/cloud-operations-api-mock/validation"
+	"github.com/googleinterns/cloud-operations-api-mock/internal/validation"
 
 	"golang.org/x/net/context"
 

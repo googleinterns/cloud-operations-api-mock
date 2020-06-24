@@ -28,7 +28,7 @@ var (
 )
 
 const (
-	missingFieldMsg = "%v must contain required %v field"
+	missingFieldMsg = "%v must contain the required %v field"
 )
 
 func CheckForRequiredFields(requiredFields []string, reqReflect reflect.Value, requestName string) error {

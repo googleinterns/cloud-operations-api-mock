@@ -23,7 +23,7 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/googleinterns/cloud-operations-api-mock/validation"
+	"github.com/googleinterns/cloud-operations-api-mock/internal/validation"
 	"google.golang.org/genproto/googleapis/api/metric"
 	"google.golang.org/genproto/googleapis/api/monitoredres"
 	"google.golang.org/genproto/googleapis/monitoring/v3"
