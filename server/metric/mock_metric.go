@@ -15,6 +15,8 @@
 package metric
 
 import (
+	"sync"
+
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/googleinterns/cloud-operations-api-mock/internal/validation"
 	"golang.org/x/net/context"
@@ -26,7 +28,14 @@ import (
 
 type MockMetricServer struct {
 	monitoring.UnimplementedMetricServiceServer
+	uploadedMetricDescriptors map[string]*metric.MetricDescriptor
+	uploadedMetricDescriptorsLock sync.Mutex
 }
+
+func NewMockMetricServer() *MockMetricServer {
+	uploadedMetricDescriptors := make(map[string]*metric.MetricDescriptor)
+	return &MockMetricServer{uploadedMetricDescriptors: uploadedMetricDescriptors}
+}	
 
 func (s *MockMetricServer) GetMonitoredResourceDescriptor(ctx context.Context, req *monitoring.GetMonitoredResourceDescriptorRequest,
 ) (*monitoredres.MonitoredResourceDescriptor, error) {
@@ -61,7 +70,12 @@ func (s *MockMetricServer) CreateMetricDescriptor(ctx context.Context, req *moni
 	if err := validation.IsValidRequest(req); err != nil {
 		return nil, err
 	}
-	return &metric.MetricDescriptor{}, nil
+
+	if err := validation.AddMetricDescriptor(&s.uploadedMetricDescriptorsLock, s.uploadedMetricDescriptors, req.Name, req.MetricDescriptor); err != nil {
+		return nil, err
+	}
+
+	return req.MetricDescriptor, nil
 }
 
 func (s *MockMetricServer) DeleteMetricDescriptor(ctx context.Context, req *monitoring.DeleteMetricDescriptorRequest,

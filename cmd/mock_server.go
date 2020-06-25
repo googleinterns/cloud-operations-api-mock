@@ -52,7 +52,7 @@ func startStandaloneServer() {
 
 	grpcServer := grpc.NewServer()
 	cloudtrace.RegisterTraceServiceServer(grpcServer, trace.NewMockTraceServer())
-	monitoring.RegisterMetricServiceServer(grpcServer, &metric.MockMetricServer{})
+	monitoring.RegisterMetricServiceServer(grpcServer, metric.NewMockMetricServer())
 
 	log.Printf("Listening on %s\n", lis.Addr().String())
 

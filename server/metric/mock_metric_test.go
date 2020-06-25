@@ -47,7 +47,7 @@ func setup() {
 	// Setup the in-memory server.
 	lis = bufconn.Listen(bufSize)
 	grpcServer = grpc.NewServer()
-	monitoring.RegisterMetricServiceServer(grpcServer, &MockMetricServer{})
+	monitoring.RegisterMetricServiceServer(grpcServer, NewMockMetricServer())
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
 			log.Fatalf("server exited with error: %v", err)
