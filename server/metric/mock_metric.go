@@ -28,14 +28,14 @@ import (
 
 type MockMetricServer struct {
 	monitoring.UnimplementedMetricServiceServer
-	uploadedMetricDescriptors map[string]*metric.MetricDescriptor
+	uploadedMetricDescriptors     map[string]*metric.MetricDescriptor
 	uploadedMetricDescriptorsLock sync.Mutex
 }
 
 func NewMockMetricServer() *MockMetricServer {
 	uploadedMetricDescriptors := make(map[string]*metric.MetricDescriptor)
 	return &MockMetricServer{uploadedMetricDescriptors: uploadedMetricDescriptors}
-}	
+}
 
 func (s *MockMetricServer) GetMonitoredResourceDescriptor(ctx context.Context, req *monitoring.GetMonitoredResourceDescriptorRequest,
 ) (*monitoredres.MonitoredResourceDescriptor, error) {
@@ -62,7 +62,12 @@ func (s *MockMetricServer) GetMetricDescriptor(ctx context.Context, req *monitor
 		return nil, err
 	}
 
-	return &metric.MetricDescriptor{}, nil
+	metricDescriptor, err := validation.AccessMetricDescriptor(&s.uploadedMetricDescriptorsLock, s.uploadedMetricDescriptors, req.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	return metricDescriptor, nil
 }
 
 func (s *MockMetricServer) CreateMetricDescriptor(ctx context.Context, req *monitoring.CreateMetricDescriptorRequest,
@@ -83,6 +88,11 @@ func (s *MockMetricServer) DeleteMetricDescriptor(ctx context.Context, req *moni
 	if err := validation.IsValidRequest(req); err != nil {
 		return nil, err
 	}
+
+	if err := validation.RemoveMetricDescriptor(&s.uploadedMetricDescriptorsLock, s.uploadedMetricDescriptors, req.Name); err != nil {
+		return nil, err
+	}
+
 	return &empty.Empty{}, nil
 }
 

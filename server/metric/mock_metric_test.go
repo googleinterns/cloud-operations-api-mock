@@ -18,7 +18,6 @@ import (
 	"context"
 	"log"
 	"net"
-	"os"
 	"strings"
 	"testing"
 
@@ -69,18 +68,14 @@ func tearDown() {
 	grpcServer.GracefulStop()
 }
 
-func TestMain(m *testing.M) {
-	setup()
-	retCode := m.Run()
-	tearDown()
-	os.Exit(retCode)
-}
-
 func bufDialer(context.Context, string) (net.Conn, error) {
 	return lis.Dial()
 }
 
 func TestMockMetricServer_CreateTimeSeries(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.CreateTimeSeriesRequest{
 		Name:       "test create time series request",
 		TimeSeries: []*monitoring.TimeSeries{&monitoring.TimeSeries{}},
@@ -97,6 +92,9 @@ func TestMockMetricServer_CreateTimeSeries(t *testing.T) {
 }
 
 func TestMockMetricServer_ListTimeSeries(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.ListTimeSeriesRequest{
 		Name:     "test list time series request",
 		Filter:   "test filter",
@@ -120,6 +118,9 @@ func TestMockMetricServer_ListTimeSeries(t *testing.T) {
 }
 
 func TestMockMetricServer_GetMonitoredResourceDescriptor(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.GetMonitoredResourceDescriptorRequest{
 		Name: "test get metric monitored resource descriptor",
 	}
@@ -135,6 +136,9 @@ func TestMockMetricServer_GetMonitoredResourceDescriptor(t *testing.T) {
 }
 
 func TestMockMetricServer_ListMonitoredResourceDescriptors(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.ListMonitoredResourceDescriptorsRequest{
 		Name: "test list monitored resource descriptors",
 	}
@@ -152,10 +156,18 @@ func TestMockMetricServer_ListMonitoredResourceDescriptors(t *testing.T) {
 }
 
 func TestMockMetricServer_GetMetricDescriptor(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.GetMetricDescriptorRequest{
-		Name: "test get metric descriptor",
+		Name: "test1",
 	}
 	want := &metric.MetricDescriptor{}
+
+	if _, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{Name: "test1", MetricDescriptor: want}); err != nil {
+		t.Fatalf("failed to create test metric descriptor with error: %v", err)
+	}
+
 	response, err := client.GetMetricDescriptor(ctx, in)
 	if err != nil {
 		t.Fatalf("failed to call GetMetricDescriptor %v", err)
@@ -167,6 +179,9 @@ func TestMockMetricServer_GetMetricDescriptor(t *testing.T) {
 }
 
 func TestMockMetricServer_CreateMetricDescriptor(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.CreateMetricDescriptorRequest{
 		Name:             "test create metric descriptor",
 		MetricDescriptor: &metric.MetricDescriptor{},
@@ -183,10 +198,17 @@ func TestMockMetricServer_CreateMetricDescriptor(t *testing.T) {
 }
 
 func TestMockMetricServer_DeleteMetricDescriptor(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.DeleteMetricDescriptorRequest{
-		Name: "test create metric descriptor",
+		Name: "test2",
 	}
 	want := &empty.Empty{}
+
+	if _, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{Name: "test2", MetricDescriptor: &metric.MetricDescriptor{}}); err != nil {
+		t.Fatalf("failed to create test metric descriptor with error: %v", err)
+	}
 
 	response, err := client.DeleteMetricDescriptor(ctx, in)
 	if err != nil {
@@ -199,6 +221,9 @@ func TestMockMetricServer_DeleteMetricDescriptor(t *testing.T) {
 }
 
 func TestMockMetricServer_ListMetricDescriptors(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.ListMetricDescriptorsRequest{
 		Name: "test list metric decriptors request",
 	}
@@ -216,6 +241,9 @@ func TestMockMetricServer_ListMetricDescriptors(t *testing.T) {
 }
 
 func TestMockMetricServer_GetMetricDescriptorError(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.GetMetricDescriptorRequest{}
 	want := validation.ErrMissingField.Err()
 	missingFields := map[string]struct{}{"Name": {}}
@@ -235,6 +263,9 @@ func TestMockMetricServer_GetMetricDescriptorError(t *testing.T) {
 }
 
 func TestMockMetricServer_GetMonitoredResourceDescriptorError(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.GetMonitoredResourceDescriptorRequest{}
 	want := validation.ErrMissingField.Err()
 	missingFields := map[string]struct{}{"Name": {}}
@@ -254,6 +285,9 @@ func TestMockMetricServer_GetMonitoredResourceDescriptorError(t *testing.T) {
 }
 
 func TestMockMetricServer_DeleteMetricDescriptorError(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.DeleteMetricDescriptorRequest{}
 	want := validation.ErrMissingField.Err()
 	missingFields := map[string]struct{}{"Name": {}}
@@ -273,6 +307,9 @@ func TestMockMetricServer_DeleteMetricDescriptorError(t *testing.T) {
 }
 
 func TestMockMetricServer_ListMetricDescriptorError(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.ListMetricDescriptorsRequest{}
 	want := validation.ErrMissingField.Err()
 	missingFields := map[string]struct{}{"Name": {}}
@@ -292,6 +329,9 @@ func TestMockMetricServer_ListMetricDescriptorError(t *testing.T) {
 }
 
 func TestMockMetricServer_CreateMetricDescriptorError(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.CreateMetricDescriptorRequest{}
 	want := validation.ErrMissingField.Err()
 	missingFields := map[string]struct{}{"Name": {}, "MetricDescriptor": {}}
@@ -311,6 +351,9 @@ func TestMockMetricServer_CreateMetricDescriptorError(t *testing.T) {
 }
 
 func TestMockMetricServer_ListMonitoredResourceDescriptorsError(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.ListMonitoredResourceDescriptorsRequest{}
 	want := validation.ErrMissingField.Err()
 	missingFields := map[string]struct{}{"Name": {}}
@@ -330,6 +373,9 @@ func TestMockMetricServer_ListMonitoredResourceDescriptorsError(t *testing.T) {
 }
 
 func TestMockMetricServer_ListTimeSeriesError(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.ListTimeSeriesRequest{}
 	want := validation.ErrMissingField.Err()
 	missingFields := map[string]struct{}{"Name": {}, "Filter": {}, "View": {}, "Interval": {}}
@@ -349,6 +395,9 @@ func TestMockMetricServer_ListTimeSeriesError(t *testing.T) {
 }
 
 func TestMockMetricServer_CreateTimeSeriesError(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.CreateTimeSeriesRequest{}
 	want := validation.ErrMissingField.Err()
 	missingFields := map[string]struct{}{"Name": {}, "TimeSeries": {}}
