@@ -46,6 +46,9 @@ func NewMockTraceServer() *MockTraceServer {
 
 // BatchWriteSpans creates and stores a list of spans on the server.
 func (s *MockTraceServer) BatchWriteSpans(ctx context.Context, req *cloudtrace.BatchWriteSpansRequest) (*empty.Empty, error) {
+	if err := validation.ValidateProjectName(req.Name); err != nil {
+		return nil, err
+	}
 	if err := validation.ValidateSpans("BatchWriteSpans", req.Spans...); err != nil {
 		return nil, err
 	}

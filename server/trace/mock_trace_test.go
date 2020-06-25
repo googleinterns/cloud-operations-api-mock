@@ -131,7 +131,7 @@ func TestMockTraceServer_BatchWriteSpans(t *testing.T) {
 	defer tearDown()
 
 	spans := []*cloudtrace.Span{
-		generateSpan("test-span-1"),
+		generateSpan("projects/test-project/traces/fcf19faad74e6548537e942267d70752/spans/0f0f39d06d0b76f8"),
 		generateSpan("test-span-2"),
 		generateSpan("test-span-3"),
 	}
@@ -195,7 +195,7 @@ func TestMockTraceServer_BatchWriteSpans_InvalidTimestamp(t *testing.T) {
 		Name:  "test-project",
 		Spans: invalidTimestampSpans,
 	}
-	want := validation.ErrInvalidTimestamp
+	want := validation.StatusInvalidTimestamp
 
 	responseSpan, err := traceClient.BatchWriteSpans(ctx, in)
 	if err == nil {
@@ -220,7 +220,7 @@ func TestMockTraceServer_BatchWriteSpans_DuplicateName(t *testing.T) {
 		generateSpan(duplicateSpanName),
 	}
 	in := &cloudtrace.BatchWriteSpansRequest{Name: "test-project", Spans: spans}
-	want := validation.ErrDuplicateSpanName
+	want := validation.StatusDuplicateSpanName
 
 	responseSpan, err := traceClient.BatchWriteSpans(ctx, in)
 	if err == nil {
@@ -281,7 +281,7 @@ func TestMockTraceServer_CreateSpan_InvalidTimestamp(t *testing.T) {
 	defer tearDown()
 
 	in := generateInvalidTimestampSpan("test-span-1")
-	want := validation.ErrInvalidTimestamp
+	want := validation.StatusInvalidTimestamp
 
 	responseSpan, err := traceClient.CreateSpan(ctx, in)
 	if err == nil {
