@@ -6,6 +6,7 @@ import "google/protobuf/empty.proto";
 
 option go_package = "github.com/googleinterns/cloud-operations-api-mock/api;mocktrace";
 
+// Next available id: 2
 message GetNumSpansResponse {
     int32 num_spans = 1;
 }

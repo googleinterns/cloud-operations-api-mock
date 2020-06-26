@@ -24,10 +24,9 @@ import (
 	"testing"
 	"time"
 
-	mocktrace "github.com/googleinterns/cloud-operations-api-mock/api"
-
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/empty"
+	mocktrace "github.com/googleinterns/cloud-operations-api-mock/api"
 	"github.com/googleinterns/cloud-operations-api-mock/internal/validation"
 
 	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"

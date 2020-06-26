@@ -25,6 +25,7 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
+// Next available id: 2
 type GetNumSpansResponse struct {
 	NumSpans             int32    `protobuf:"varint,1,opt,name=num_spans,json=numSpans,proto3" json:"num_spans,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
