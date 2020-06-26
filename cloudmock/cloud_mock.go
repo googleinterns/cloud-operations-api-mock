@@ -42,7 +42,7 @@ func startMockServer() (string, *grpc.Server) {
 	}
 
 	grpcServer := grpc.NewServer()
-	cloudtrace.RegisterTraceServiceServer(grpcServer, &trace.MockTraceServer{})
+	cloudtrace.RegisterTraceServiceServer(grpcServer, trace.NewMockTraceServer())
 	monitoring.RegisterMetricServiceServer(grpcServer, &metric.MockMetricServer{})
 
 	log.Printf("Listening on %s\n", lis.Addr().String())
