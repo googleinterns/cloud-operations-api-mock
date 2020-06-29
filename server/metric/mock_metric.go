@@ -76,7 +76,7 @@ func (s *MockMetricServer) CreateMetricDescriptor(ctx context.Context, req *moni
 		return nil, err
 	}
 
-	if err := validation.AddMetricDescriptor(&s.uploadedMetricDescriptorsLock, s.uploadedMetricDescriptors, req.Name, req.MetricDescriptor); err != nil {
+	if err := validation.AddMetricDescriptor(&s.uploadedMetricDescriptorsLock, s.uploadedMetricDescriptors, req.MetricDescriptor.Name, req.MetricDescriptor); err != nil {
 		return nil, err
 	}
 
