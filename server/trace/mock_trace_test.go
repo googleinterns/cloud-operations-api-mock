@@ -16,6 +16,9 @@ package trace
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
 	"log"
 	"net"
 	"reflect"
@@ -35,7 +38,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const bufSize = 1024 * 1024
+const (
+	bufSize        = 1024 * 1024
+	spanNameFormat = "projects/%v/traces/%v/spans/%v"
+)
 
 var (
 	traceClient cloudtrace.TraceServiceClient
@@ -79,7 +85,8 @@ func bufDialer(context.Context, string) (net.Conn, error) {
 	return lis.Dial()
 }
 
-func generateSpan(spanName string) *cloudtrace.Span {
+func generateSpan() *cloudtrace.Span {
+	spanName := generateSpanName("test-project")
 	startTime, err := ptypes.TimestampProto(time.Now().Add(-(time.Second * time.Duration(30))))
 	if err != nil {
 		log.Fatalf("failed to create span with error: %v", err)
@@ -88,7 +95,7 @@ func generateSpan(spanName string) *cloudtrace.Span {
 
 	return &cloudtrace.Span{
 		Name:   spanName,
-		SpanId: spanName,
+		SpanId: spanName[len(spanName)-16:],
 		DisplayName: &cloudtrace.TruncatableString{
 			Value:              spanName,
 			TruncatedByteCount: 0,
@@ -98,8 +105,8 @@ func generateSpan(spanName string) *cloudtrace.Span {
 	}
 }
 
-func generateInvalidTimestampSpan(spanName string) *cloudtrace.Span {
-	invalidTimestampSpan := generateSpan(spanName)
+func generateInvalidTimestampSpan() *cloudtrace.Span {
+	invalidTimestampSpan := generateSpan()
 	end, err := ptypes.Timestamp(invalidTimestampSpan.EndTime)
 	if err != nil {
 		log.Fatalf("failed to create span with error: %v", err)
@@ -112,8 +119,8 @@ func generateInvalidTimestampSpan(spanName string) *cloudtrace.Span {
 	return invalidTimestampSpan
 }
 
-func generateMissingFieldSpan(spanName string, missingFields ...string) *cloudtrace.Span {
-	span := generateSpan(spanName)
+func generateMissingFieldSpan(missingFields ...string) *cloudtrace.Span {
+	span := generateSpan()
 	for _, field := range missingFields {
 		removeField(span, field)
 	}
@@ -126,17 +133,37 @@ func removeField(span *cloudtrace.Span, field string) {
 	spanField.Set(zeroValue)
 }
 
+func generateHex(n int) (string, error) {
+	bytes := make([]byte, n)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+}
+
+func generateSpanName(projectName string) string {
+	traceId, err := generateHex(16)
+	if err != nil {
+		log.Fatalf("failed to generate span name: %v", err)
+	}
+	spanId, err := generateHex(8)
+	if err != nil {
+		log.Fatalf("failed to generate span name: %v", err)
+	}
+	return fmt.Sprintf(spanNameFormat, projectName, traceId, spanId)
+}
+
 func TestMockTraceServer_BatchWriteSpans(t *testing.T) {
 	setup()
 	defer tearDown()
 
 	spans := []*cloudtrace.Span{
-		generateSpan("projects/test-project/traces/fcf19faad74e6548537e942267d70752/spans/0f0f39d06d0b76f8"),
-		generateSpan("test-span-2"),
-		generateSpan("test-span-3"),
+		generateSpan(),
+		generateSpan(),
+		generateSpan(),
 	}
 	in := &cloudtrace.BatchWriteSpansRequest{
-		Name:  "test-project",
+		Name:  "projects/test-project",
 		Spans: spans,
 	}
 	want := &empty.Empty{}
@@ -157,11 +184,11 @@ func TestMockTraceServer_BatchWriteSpans_MissingField(t *testing.T) {
 	defer tearDown()
 
 	missingFieldsSpan := []*cloudtrace.Span{
-		generateMissingFieldSpan("test-span-1", "Name", "StartTime"),
-		generateMissingFieldSpan("test-span-2"),
+		generateMissingFieldSpan("Name", "StartTime"),
+		generateMissingFieldSpan(),
 	}
 	in := &cloudtrace.BatchWriteSpansRequest{
-		Name:  "test-project",
+		Name:  "projects/test-project",
 		Spans: missingFieldsSpan,
 	}
 	want := validation.ErrMissingField.Err()
@@ -187,12 +214,12 @@ func TestMockTraceServer_BatchWriteSpans_InvalidTimestamp(t *testing.T) {
 	defer tearDown()
 
 	invalidTimestampSpans := []*cloudtrace.Span{
-		generateInvalidTimestampSpan("test-span-1"),
-		generateInvalidTimestampSpan("test-span-2"),
+		generateInvalidTimestampSpan(),
+		generateInvalidTimestampSpan(),
 	}
 
 	in := &cloudtrace.BatchWriteSpansRequest{
-		Name:  "test-project",
+		Name:  "projects/test-project",
 		Spans: invalidTimestampSpans,
 	}
 	want := validation.StatusInvalidTimestamp
@@ -214,12 +241,12 @@ func TestMockTraceServer_BatchWriteSpans_DuplicateName(t *testing.T) {
 	setup()
 	defer tearDown()
 
-	const duplicateSpanName = "test-span-1"
+	duplicateSpan := generateSpan()
 	spans := []*cloudtrace.Span{
-		generateSpan(duplicateSpanName),
-		generateSpan(duplicateSpanName),
+		duplicateSpan,
+		duplicateSpan,
 	}
-	in := &cloudtrace.BatchWriteSpansRequest{Name: "test-project", Spans: spans}
+	in := &cloudtrace.BatchWriteSpansRequest{Name: "projects/test-project", Spans: spans}
 	want := validation.StatusDuplicateSpanName
 
 	responseSpan, err := traceClient.BatchWriteSpans(ctx, in)
@@ -229,8 +256,8 @@ func TestMockTraceServer_BatchWriteSpans_DuplicateName(t *testing.T) {
 		return
 	}
 
-	if valid := validation.ValidateDuplicateSpanNames(err, duplicateSpanName); !valid {
-		t.Errorf("expected duplicate spanName: %v", duplicateSpanName)
+	if valid := validation.ValidateDuplicateSpanNames(err, duplicateSpan.Name); !valid {
+		t.Errorf("expected duplicate spanName: %v", duplicateSpan.Name)
 	}
 }
 
@@ -238,7 +265,7 @@ func TestMockTraceServer_CreateSpan(t *testing.T) {
 	setup()
 	defer tearDown()
 
-	span := generateSpan("test-span-1")
+	span := generateSpan()
 	in, want := span, span
 
 	responseSpan, err := traceClient.CreateSpan(ctx, in)
@@ -257,7 +284,7 @@ func TestMockTraceServer_CreateSpan_MissingFields(t *testing.T) {
 	setup()
 	defer tearDown()
 
-	in := generateMissingFieldSpan("test-span-1", "SpanId", "EndTime")
+	in := generateMissingFieldSpan("SpanId", "EndTime")
 	want := validation.ErrMissingField.Err()
 	missingFields := map[string]struct{}{
 		"SpanId":  {},
@@ -280,7 +307,7 @@ func TestMockTraceServer_CreateSpan_InvalidTimestamp(t *testing.T) {
 	setup()
 	defer tearDown()
 
-	in := generateInvalidTimestampSpan("test-span-1")
+	in := generateInvalidTimestampSpan()
 	want := validation.StatusInvalidTimestamp
 
 	responseSpan, err := traceClient.CreateSpan(ctx, in)
@@ -326,22 +353,22 @@ func TestMockTraceServer_GetNumSpans(t *testing.T) {
 	var wg sync.WaitGroup
 	const expectedNumSpans = 6
 	spans1 := []*cloudtrace.Span{
-		generateSpan("test-span-1"),
-		generateSpan("test-span-2"),
-		generateSpan("test-span-3"),
+		generateSpan(),
+		generateSpan(),
+		generateSpan(),
 	}
 
 	spans2 := []*cloudtrace.Span{
-		generateSpan("test-span-4"),
-		generateSpan("test-span-5"),
-		generateSpan("test-span-6"),
+		generateSpan(),
+		generateSpan(),
+		generateSpan(),
 	}
 
 	go func() {
 		wg.Add(1)
 		defer wg.Done()
 		_, err := traceClient.BatchWriteSpans(ctx, &cloudtrace.BatchWriteSpansRequest{
-			Name:  "test-project",
+			Name:  "projects/test-project",
 			Spans: spans1,
 		})
 		if err != nil {
@@ -350,7 +377,7 @@ func TestMockTraceServer_GetNumSpans(t *testing.T) {
 	}()
 
 	_, err := traceClient.BatchWriteSpans(ctx, &cloudtrace.BatchWriteSpansRequest{
-		Name:  "test-project",
+		Name:  "projects/test-project",
 		Spans: spans2,
 	})
 	wg.Wait()
