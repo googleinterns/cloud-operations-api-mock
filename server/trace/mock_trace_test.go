@@ -296,6 +296,29 @@ func TestMockTraceServer_CreateSpan_InvalidTimestamp(t *testing.T) {
 	}
 }
 
+func TestMockTraceServer_CreateSpan_DuplicateName(t *testing.T) {
+	setup()
+	defer tearDown()
+
+	const duplicateSpanName = "test-span-1"
+	in := generateSpan(duplicateSpanName)
+	want := validation.ErrDuplicateSpanName
+
+	_, err := traceClient.CreateSpan(ctx, in)
+	if err != nil {
+		t.Errorf("CreateSpan(%v) returned error %v", in, err)
+	}
+
+	resp, err := traceClient.CreateSpan(ctx, in)
+	if err == nil {
+		t.Errorf("CreateSpan(%v) returned %v, expected error %v", in, resp, want)
+	}
+
+	if valid := validation.ValidateDuplicateSpanNames(err, duplicateSpanName); !valid {
+		t.Errorf("expected duplicate spanName: %v", duplicateSpanName)
+	}
+}
+
 func TestMockTraceServer_GetNumSpans(t *testing.T) {
 	setup()
 	defer tearDown()
