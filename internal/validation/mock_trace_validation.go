@@ -26,7 +26,6 @@ import (
 
 	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
@@ -45,40 +44,6 @@ var (
 	requiredFields   = []string{"Name", "SpanId", "DisplayName", "StartTime", "EndTime"}
 	spanNameRegex    = regexp.MustCompile("^projects/(.*)/traces/[a-fA-F0-9]{32}/spans/[a-fA-F0-9]{16}")
 	projectNameRegex = regexp.MustCompile("^projects/(.*)")
-
-	StatusInvalidSpanName = status.Error(codes.InvalidArgument,
-		"span name must be of the form projects/{project_id}/traces/{trace_id}/spans/{span_id}")
-	StatusInvalidProjectName = status.Error(codes.InvalidArgument,
-		"project name must be of the form projects/{project_id}")
-	StatusInvalidTimestamp = status.Error(codes.InvalidArgument,
-		"start time must be before end time")
-	StatusMalformedTimestamp = status.Error(codes.InvalidArgument,
-		"unable to parse timestamp")
-	StatusTimeEventMissingTime = status.Error(codes.InvalidArgument,
-		"time events' time field cannot be empty")
-	StatusInvalidMessageEvent = status.Error(codes.InvalidArgument,
-		"message events must contain a type, ID and uncompressed size in bytes")
-	StatusInvalidLink = status.Error(codes.InvalidArgument,
-		"links must contain a Span ID and trace ID")
-
-	StatusInvalidDisplayName = status.Error(codes.InvalidArgument,
-		fmt.Sprintf("displayName has max length of %v bytes", maxDisplayNameBytes))
-	StatusTooManyAttributes = status.Error(codes.InvalidArgument,
-		fmt.Sprintf("a span can have at most %v attributes", maxAttributes))
-	StatusInvalidAttributeKey = status.Error(codes.InvalidArgument,
-		fmt.Sprintf("attribute keys have a max length of %v bytes", maxAttributeKeyBytes))
-	StatusInvalidAttributeValue = status.Error(codes.InvalidArgument,
-		fmt.Sprintf("attribute values have a max length of %v bytes", maxAttributeValueBytes))
-	StatusTooManyTimeEvents = status.Error(codes.InvalidArgument,
-		fmt.Sprintf("a span can have at most %v time events", maxTimeEvents))
-	StatusInvalidAnnotation = status.Error(codes.InvalidArgument,
-		fmt.Sprintf("annotation descriptions have a max length of %v bytes", maxAnnotationBytes))
-	StatusTooManyAnnotationAttributes = status.Error(codes.InvalidArgument,
-		fmt.Sprintf("annotations can have at most %v attributes", maxAnnotationAttributes))
-	StatusTooManyLinks = status.Error(codes.InvalidArgument,
-		fmt.Sprintf("a span can have at most %v links", maxLinks))
-
-	StatusDuplicateSpanName = status.New(codes.AlreadyExists, "duplicate span name")
 )
 
 // ValidateSpans checks that the spans conform to the API requirements.
