@@ -15,9 +15,11 @@
 package validation
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/golang/protobuf/ptypes"
 
@@ -63,22 +65,30 @@ func validateTimeStamps(span *cloudtrace.Span) error {
 	return nil
 }
 
-func AddSpans(uploadedSpans map[string]*cloudtrace.Span, lock *sync.Mutex, spans ...*cloudtrace.Span) error {
+func AddSpans(uploadedSpans map[string]*cloudtrace.Span, lock *sync.Mutex,
+	delay time.Duration, ctx context.Context, spans ...*cloudtrace.Span) error {
+
 	br := &errdetails.ErrorInfo{}
 
-	lock.Lock()
-	defer lock.Unlock()
-	for _, span := range spans {
-		if _, ok := uploadedSpans[span.Name]; ok {
-			br.Reason = span.Name
-			st, err := ErrDuplicateSpanName.WithDetails(br)
-			if err != nil {
-				panic(fmt.Sprintf("unexpected error attaching metadata: %v", err))
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(delay):
+		lock.Lock()
+		defer lock.Unlock()
+		for _, span := range spans {
+			if _, ok := uploadedSpans[span.Name]; ok {
+				br.Reason = span.Name
+				st, err := ErrDuplicateSpanName.WithDetails(br)
+				if err != nil {
+					panic(fmt.Sprintf("unexpected error attaching metadata: %v", err))
+				}
+				return st.Err()
 			}
-			return st.Err()
+			uploadedSpans[span.Name] = span
 		}
-		uploadedSpans[span.Name] = span
 	}
+
 	return nil
 }
 
