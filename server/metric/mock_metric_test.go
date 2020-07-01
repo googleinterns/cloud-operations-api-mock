@@ -368,6 +368,38 @@ func TestMockMetricServer_MetricDescriptor_DataRace(t *testing.T) {
 	wg.Wait()
 }
 
+func TestMockMetricServer_DuplicateMetricDescriptorError(t *testing.T) {
+	setup()
+	defer tearDown()
+	duplicateSpanName := "test-metric-descriptor-1"
+
+	if _, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{
+		Name: "test",
+		MetricDescriptor: &metric.MetricDescriptor{
+			Name: duplicateSpanName,
+		},
+	}); err != nil {
+		t.Fatalf("failed to create test metric descriptor with error: %v", err)
+	}
+
+	in := &monitoring.CreateMetricDescriptorRequest{
+		Name: "test",
+		MetricDescriptor: &metric.MetricDescriptor{
+			Name: duplicateSpanName,
+		},
+	}
+	want := validation.StatusDuplicateMetricDescriptorName
+	response, err := client.CreateMetricDescriptor(ctx, in)
+	if err == nil {
+		t.Errorf("CreateMetricDescriptor(%q) == %q, expected error %q", in, response, want.Message())
+	}
+
+	if valid := validation.ValidateDuplicateSpanNames(err, duplicateSpanName); !valid {
+		t.Errorf("expected duplicate spanName: %v", duplicateSpanName)
+	}
+
+}
+
 func TestMockMetricServer_DeleteMetricDescriptor_MissingFieldsError(t *testing.T) {
 	setup()
 	defer tearDown()
