@@ -55,7 +55,7 @@ func startStandaloneServer() {
 	mockTraceServer := trace.NewMockTraceServer()
 	cloudtrace.RegisterTraceServiceServer(grpcServer, mockTraceServer)
 	mocktrace.RegisterMockTraceServiceServer(grpcServer, mockTraceServer)
-	monitoring.RegisterMetricServiceServer(grpcServer, &metric.MockMetricServer{})
+	monitoring.RegisterMetricServiceServer(grpcServer, metric.NewMockMetricServer())
 
 	log.Printf("Listening on %s\n", lis.Addr().String())
 

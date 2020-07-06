@@ -15,9 +15,20 @@
 package validation
 
 import (
+	"fmt"
 	"reflect"
+	"sync"
 
+	"google.golang.org/genproto/googleapis/api/metric"
 	"google.golang.org/genproto/googleapis/monitoring/v3"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+)
+
+var (
+	StatusDuplicateMetricDescriptorName = status.New(codes.AlreadyExists, "metric descriptor with same name already exists")
+	StatusMetricDescriptorNotFound      = status.New(codes.NotFound, "metric descriptor with given name does not exist")
 )
 
 func IsValidRequest(req interface{}) error {
@@ -47,4 +58,59 @@ func IsValidRequest(req interface{}) error {
 	}
 
 	return CheckForRequiredFields(requiredFields, reqReflect, requestName)
+}
+
+func AddMetricDescriptor(lock *sync.Mutex, uploadedMetricDescriptors map[string]*metric.MetricDescriptor, name string, metricDescriptor *metric.MetricDescriptor) error {
+	lock.Lock()
+	defer lock.Unlock()
+
+	if _, ok := uploadedMetricDescriptors[name]; ok {
+		br := &errdetails.ErrorInfo{}
+		br.Reason = name
+		st, err := StatusDuplicateMetricDescriptorName.WithDetails(br)
+		if err != nil {
+			panic(fmt.Sprintf("unexpected error attaching metadata: %v", err))
+		}
+		return st.Err()
+	}
+
+	uploadedMetricDescriptors[name] = metricDescriptor
+
+	return nil
+}
+
+func AccessMetricDescriptor(lock *sync.Mutex, uploadedMetricDescriptors map[string]*metric.MetricDescriptor, name string) (*metric.MetricDescriptor, error) {
+	lock.Lock()
+	defer lock.Unlock()
+
+	if _, ok := uploadedMetricDescriptors[name]; !ok {
+		br := &errdetails.ErrorInfo{}
+		br.Reason = name
+		st, err := StatusMetricDescriptorNotFound.WithDetails(br)
+		if err != nil {
+			panic(fmt.Sprintf("unexpected error attaching metadata: %v", err))
+		}
+		return nil, st.Err()
+	}
+
+	return uploadedMetricDescriptors[name], nil
+}
+
+func RemoveMetricDescriptor(lock *sync.Mutex, uploadedMetricDescriptors map[string]*metric.MetricDescriptor, name string) error {
+	lock.Lock()
+	defer lock.Unlock()
+
+	if _, ok := uploadedMetricDescriptors[name]; !ok {
+		br := &errdetails.ErrorInfo{}
+		br.Reason = name
+		st, err := StatusMetricDescriptorNotFound.WithDetails(br)
+		if err != nil {
+			panic(fmt.Sprintf("unexpected error attaching metadata: %v", err))
+		}
+		return st.Err()
+	}
+
+	delete(uploadedMetricDescriptors, name)
+
+	return nil
 }

@@ -18,8 +18,8 @@ import (
 	"context"
 	"log"
 	"net"
-	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/golang/protobuf/ptypes/empty"
@@ -29,6 +29,8 @@ import (
 	"google.golang.org/genproto/googleapis/monitoring/v3"
 	"google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	st "google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/proto"
 )
@@ -47,7 +49,7 @@ func setup() {
 	// Setup the in-memory server.
 	lis = bufconn.Listen(bufSize)
 	grpcServer = grpc.NewServer()
-	monitoring.RegisterMetricServiceServer(grpcServer, &MockMetricServer{})
+	monitoring.RegisterMetricServiceServer(grpcServer, NewMockMetricServer())
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
 			log.Fatalf("server exited with error: %v", err)
@@ -69,18 +71,14 @@ func tearDown() {
 	grpcServer.GracefulStop()
 }
 
-func TestMain(m *testing.M) {
-	setup()
-	retCode := m.Run()
-	tearDown()
-	os.Exit(retCode)
-}
-
 func bufDialer(context.Context, string) (net.Conn, error) {
 	return lis.Dial()
 }
 
 func TestMockMetricServer_CreateTimeSeries(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.CreateTimeSeriesRequest{
 		Name:       "test create time series request",
 		TimeSeries: []*monitoring.TimeSeries{&monitoring.TimeSeries{}},
@@ -97,6 +95,9 @@ func TestMockMetricServer_CreateTimeSeries(t *testing.T) {
 }
 
 func TestMockMetricServer_ListTimeSeries(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.ListTimeSeriesRequest{
 		Name:     "test list time series request",
 		Filter:   "test filter",
@@ -120,6 +121,9 @@ func TestMockMetricServer_ListTimeSeries(t *testing.T) {
 }
 
 func TestMockMetricServer_GetMonitoredResourceDescriptor(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.GetMonitoredResourceDescriptorRequest{
 		Name: "test get metric monitored resource descriptor",
 	}
@@ -135,6 +139,9 @@ func TestMockMetricServer_GetMonitoredResourceDescriptor(t *testing.T) {
 }
 
 func TestMockMetricServer_ListMonitoredResourceDescriptors(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.ListMonitoredResourceDescriptorsRequest{
 		Name: "test list monitored resource descriptors",
 	}
@@ -152,10 +159,25 @@ func TestMockMetricServer_ListMonitoredResourceDescriptors(t *testing.T) {
 }
 
 func TestMockMetricServer_GetMetricDescriptor(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.GetMetricDescriptorRequest{
-		Name: "test get metric descriptor",
+		Name: "test-metric-descriptor-1",
 	}
-	want := &metric.MetricDescriptor{}
+	want := &metric.MetricDescriptor{
+		Name: "test-metric-descriptor-1",
+	}
+
+	if _, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{
+		Name: "test-metric-descriptor-1",
+		MetricDescriptor: &metric.MetricDescriptor{
+			Name: "test-metric-descriptor-1",
+		},
+	}); err != nil {
+		t.Fatalf("failed to create test metric descriptor with error: %v", err)
+	}
+
 	response, err := client.GetMetricDescriptor(ctx, in)
 	if err != nil {
 		t.Fatalf("failed to call GetMetricDescriptor %v", err)
@@ -167,6 +189,9 @@ func TestMockMetricServer_GetMetricDescriptor(t *testing.T) {
 }
 
 func TestMockMetricServer_CreateMetricDescriptor(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.CreateMetricDescriptorRequest{
 		Name:             "test create metric descriptor",
 		MetricDescriptor: &metric.MetricDescriptor{},
@@ -174,19 +199,31 @@ func TestMockMetricServer_CreateMetricDescriptor(t *testing.T) {
 	want := &metric.MetricDescriptor{}
 	response, err := client.CreateMetricDescriptor(ctx, in)
 	if err != nil {
-		t.Fatalf("failed to call CreateMetricDescriptorRequest: %v", err)
+		t.Fatalf("failed to call CreateMetricDescriptor: %v", err)
 	}
 
 	if !proto.Equal(response, want) {
-		t.Errorf("CreateMetricDescriptorRequest(%q) == %q, want %q", in, response, want)
+		t.Errorf("CreateMetricDescriptor(%q) == %q, want %q", in, response, want)
 	}
 }
 
 func TestMockMetricServer_DeleteMetricDescriptor(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.DeleteMetricDescriptorRequest{
-		Name: "test create metric descriptor",
+		Name: "test-metric-descriptor",
 	}
 	want := &empty.Empty{}
+
+	if _, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{
+		Name: "test",
+		MetricDescriptor: &metric.MetricDescriptor{
+			Name: "test-metric-descriptor",
+		},
+	}); err != nil {
+		t.Fatalf("failed to create test metric descriptor with error: %v", err)
+	}
 
 	response, err := client.DeleteMetricDescriptor(ctx, in)
 	if err != nil {
@@ -199,6 +236,9 @@ func TestMockMetricServer_DeleteMetricDescriptor(t *testing.T) {
 }
 
 func TestMockMetricServer_ListMetricDescriptors(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.ListMetricDescriptorsRequest{
 		Name: "test list metric decriptors request",
 	}
@@ -215,7 +255,10 @@ func TestMockMetricServer_ListMetricDescriptors(t *testing.T) {
 	}
 }
 
-func TestMockMetricServer_GetMetricDescriptorError(t *testing.T) {
+func TestMockMetricServer_GetMetricDescriptor_MissingFieldsError(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.GetMetricDescriptorRequest{}
 	want := validation.ErrMissingField.Err()
 	missingFields := map[string]struct{}{"Name": {}}
@@ -234,7 +277,10 @@ func TestMockMetricServer_GetMetricDescriptorError(t *testing.T) {
 	}
 }
 
-func TestMockMetricServer_GetMonitoredResourceDescriptorError(t *testing.T) {
+func TestMockMetricServer_GetMonitoredResourceDescriptor_MissingFieldsError(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.GetMonitoredResourceDescriptorRequest{}
 	want := validation.ErrMissingField.Err()
 	missingFields := map[string]struct{}{"Name": {}}
@@ -253,7 +299,109 @@ func TestMockMetricServer_GetMonitoredResourceDescriptorError(t *testing.T) {
 	}
 }
 
-func TestMockMetricServer_DeleteMetricDescriptorError(t *testing.T) {
+func TestMockMetricServer_GetMetricDescriptor_NotFoundError(t *testing.T) {
+	setup()
+	defer tearDown()
+
+	in := &monitoring.GetMetricDescriptorRequest{
+		Name: "test",
+	}
+	want := codes.NotFound
+	response, err := client.GetMetricDescriptor(ctx, in)
+	if err == nil {
+		t.Errorf("GetMetricDescriptor(%q) == %q, expected error %q", in, response, want)
+	}
+
+	if s := st.Convert(err); s.Code() != want {
+		t.Errorf("GetMetricDescriptor(%q) returned error %q, expected error %q",
+			in, s.Message(), want)
+	}
+}
+
+func TestMockMetricServer_DeleteMetricDescriptor_NotFoundError(t *testing.T) {
+	setup()
+	defer tearDown()
+
+	in := &monitoring.DeleteMetricDescriptorRequest{
+		Name: "test",
+	}
+	want := codes.NotFound
+	response, err := client.DeleteMetricDescriptor(ctx, in)
+	if err == nil {
+		t.Errorf("DeleteMetricDescriptor(%q) == %q, expected error %q", in, response, want)
+	}
+
+	if s := st.Convert(err); s.Code() != want {
+		t.Errorf("DeleteMetricDescriptor(%q) returned error %q, expected error %q",
+			in, s.Message(), want)
+	}
+}
+
+func TestMockMetricServer_MetricDescriptor_DataRace(t *testing.T) {
+	setup()
+	defer tearDown()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		_, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{
+			Name:             "test-create-metric-descriptor",
+			MetricDescriptor: &metric.MetricDescriptor{Name: "test-metric-descriptor-1"},
+		})
+		if err != nil {
+			t.Fatalf("failed to call CreateMetricDescriptor: %v", err)
+		}
+	}()
+
+	_, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{
+		Name:             "test-create-metric-descriptor",
+		MetricDescriptor: &metric.MetricDescriptor{Name: "test-metric-descriptor-2"},
+	})
+	if err != nil {
+		t.Fatalf("failed to call CreateMetricDescriptor: %v", err)
+	}
+
+	wg.Wait()
+}
+
+func TestMockMetricServer_DuplicateMetricDescriptorError(t *testing.T) {
+	setup()
+	defer tearDown()
+	duplicateSpanName := "test-metric-descriptor-1"
+
+	if _, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{
+		Name: "test",
+		MetricDescriptor: &metric.MetricDescriptor{
+			Name: duplicateSpanName,
+		},
+	}); err != nil {
+		t.Fatalf("failed to create test metric descriptor with error: %v", err)
+	}
+
+	in := &monitoring.CreateMetricDescriptorRequest{
+		Name: "test",
+		MetricDescriptor: &metric.MetricDescriptor{
+			Name: duplicateSpanName,
+		},
+	}
+	want := codes.AlreadyExists
+	response, err := client.CreateMetricDescriptor(ctx, in)
+	if err == nil {
+		t.Errorf("CreateMetricDescriptor(%q) == %q, expected error %q", in, response, want)
+	}
+
+	if valid := validation.ValidateDuplicateSpanNames(err, duplicateSpanName); !valid {
+		t.Errorf("expected duplicate spanName: %v", duplicateSpanName)
+	}
+
+}
+
+func TestMockMetricServer_DeleteMetricDescriptor_MissingFieldsError(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.DeleteMetricDescriptorRequest{}
 	want := validation.ErrMissingField.Err()
 	missingFields := map[string]struct{}{"Name": {}}
@@ -272,7 +420,10 @@ func TestMockMetricServer_DeleteMetricDescriptorError(t *testing.T) {
 	}
 }
 
-func TestMockMetricServer_ListMetricDescriptorError(t *testing.T) {
+func TestMockMetricServer_ListMetricDescriptor_MissingFieldsError(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.ListMetricDescriptorsRequest{}
 	want := validation.ErrMissingField.Err()
 	missingFields := map[string]struct{}{"Name": {}}
@@ -291,7 +442,10 @@ func TestMockMetricServer_ListMetricDescriptorError(t *testing.T) {
 	}
 }
 
-func TestMockMetricServer_CreateMetricDescriptorError(t *testing.T) {
+func TestMockMetricServer_CreateMetricDescriptor_MissingFieldsError(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.CreateMetricDescriptorRequest{}
 	want := validation.ErrMissingField.Err()
 	missingFields := map[string]struct{}{"Name": {}, "MetricDescriptor": {}}
@@ -310,7 +464,10 @@ func TestMockMetricServer_CreateMetricDescriptorError(t *testing.T) {
 	}
 }
 
-func TestMockMetricServer_ListMonitoredResourceDescriptorsError(t *testing.T) {
+func TestMockMetricServer_ListMonitoredResourceDescriptors_MissingFieldsError(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.ListMonitoredResourceDescriptorsRequest{}
 	want := validation.ErrMissingField.Err()
 	missingFields := map[string]struct{}{"Name": {}}
@@ -329,7 +486,10 @@ func TestMockMetricServer_ListMonitoredResourceDescriptorsError(t *testing.T) {
 	}
 }
 
-func TestMockMetricServer_ListTimeSeriesError(t *testing.T) {
+func TestMockMetricServer_ListTimeSeries_MissingFieldsError(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.ListTimeSeriesRequest{}
 	want := validation.ErrMissingField.Err()
 	missingFields := map[string]struct{}{"Name": {}, "Filter": {}, "View": {}, "Interval": {}}
@@ -348,7 +508,10 @@ func TestMockMetricServer_ListTimeSeriesError(t *testing.T) {
 	}
 }
 
-func TestMockMetricServer_CreateTimeSeriesError(t *testing.T) {
+func TestMockMetricServer_CreateTimeSeries_MissingFieldsError(t *testing.T) {
+	setup()
+	defer tearDown()
+
 	in := &monitoring.CreateTimeSeriesRequest{}
 	want := validation.ErrMissingField.Err()
 	missingFields := map[string]struct{}{"Name": {}, "TimeSeries": {}}
