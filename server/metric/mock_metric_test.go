@@ -29,6 +29,7 @@ import (
 	"google.golang.org/genproto/googleapis/monitoring/v3"
 	"google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	st "google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/proto"
@@ -305,15 +306,15 @@ func TestMockMetricServer_GetMetricDescriptor_NotFoundError(t *testing.T) {
 	in := &monitoring.GetMetricDescriptorRequest{
 		Name: "test",
 	}
-	want := validation.StatusMetricDescriptorNotFound
+	want := codes.NotFound
 	response, err := client.GetMetricDescriptor(ctx, in)
 	if err == nil {
-		t.Errorf("GetMetricDescriptor(%q) == %q, expected error %q", in, response, want.Message())
+		t.Errorf("GetMetricDescriptor(%q) == %q, expected error %q", in, response, want)
 	}
 
-	if s := st.Convert(err); s.Code() != want.Code() {
+	if s := st.Convert(err); s.Code() != want {
 		t.Errorf("GetMetricDescriptor(%q) returned error %q, expected error %q",
-			in, s.Message(), want.Message())
+			in, s.Message(), want)
 	}
 }
 
@@ -324,15 +325,15 @@ func TestMockMetricServer_DeleteMetricDescriptor_NotFoundError(t *testing.T) {
 	in := &monitoring.DeleteMetricDescriptorRequest{
 		Name: "test",
 	}
-	want := validation.StatusMetricDescriptorNotFound
+	want := codes.NotFound
 	response, err := client.DeleteMetricDescriptor(ctx, in)
 	if err == nil {
-		t.Errorf("DeleteMetricDescriptor(%q) == %q, expected error %q", in, response, want.Message())
+		t.Errorf("DeleteMetricDescriptor(%q) == %q, expected error %q", in, response, want)
 	}
 
-	if s := st.Convert(err); s.Code() != want.Code() {
+	if s := st.Convert(err); s.Code() != want {
 		t.Errorf("DeleteMetricDescriptor(%q) returned error %q, expected error %q",
-			in, s.Message(), want.Message())
+			in, s.Message(), want)
 	}
 }
 
@@ -341,7 +342,7 @@ func TestMockMetricServer_MetricDescriptor_DataRace(t *testing.T) {
 	defer tearDown()
 
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(1)
 
 	go func() {
 		defer wg.Done()
@@ -354,16 +355,13 @@ func TestMockMetricServer_MetricDescriptor_DataRace(t *testing.T) {
 		}
 	}()
 
-	go func() {
-		defer wg.Done()
-		_, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{
-			Name:             "test-create-metric-descriptor",
-			MetricDescriptor: &metric.MetricDescriptor{Name: "test-metric-descriptor-2"},
-		})
-		if err != nil {
-			t.Fatalf("failed to call CreateMetricDescriptor: %v", err)
-		}
-	}()
+	_, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{
+		Name:             "test-create-metric-descriptor",
+		MetricDescriptor: &metric.MetricDescriptor{Name: "test-metric-descriptor-2"},
+	})
+	if err != nil {
+		t.Fatalf("failed to call CreateMetricDescriptor: %v", err)
+	}
 
 	wg.Wait()
 }
@@ -388,10 +386,10 @@ func TestMockMetricServer_DuplicateMetricDescriptorError(t *testing.T) {
 			Name: duplicateSpanName,
 		},
 	}
-	want := validation.StatusDuplicateMetricDescriptorName
+	want := codes.AlreadyExists
 	response, err := client.CreateMetricDescriptor(ctx, in)
 	if err == nil {
-		t.Errorf("CreateMetricDescriptor(%q) == %q, expected error %q", in, response, want.Message())
+		t.Errorf("CreateMetricDescriptor(%q) == %q, expected error %q", in, response, want)
 	}
 
 	if valid := validation.ValidateDuplicateSpanNames(err, duplicateSpanName); !valid {
