@@ -97,10 +97,10 @@ func validateTimeStamps(span *cloudtrace.Span) error {
 	return nil
 }
 
-// AddSpans adds the given spans to the map of uploaded spans as long as there are no duplicate names.
+// AddSpans adds the given spans to the list of uploaded spans as long as there are no duplicate names.
 // If a duplicate span name is detected, it will not be written, and an error is returned.
-func AddSpans(ctx context.Context, uploadedSpans map[string]*cloudtrace.Span, lock *sync.Mutex,
-	delay time.Duration, spans ...*cloudtrace.Span) error {
+func AddSpans(uploadedSpans *[]*cloudtrace.Span, uploadedSpanNames map[string]bool,
+	lock *sync.Mutex, delay time.Duration, ctx context.Context, spans ...*cloudtrace.Span) error {
 
 	br := &errdetails.ErrorInfo{}
 
@@ -111,7 +111,7 @@ func AddSpans(ctx context.Context, uploadedSpans map[string]*cloudtrace.Span, lo
 		lock.Lock()
 		defer lock.Unlock()
 		for _, span := range spans {
-			if _, ok := uploadedSpans[span.Name]; ok {
+			if _, ok := uploadedSpanNames[span.Name]; ok {
 				br.Reason = span.Name
 				st, err := statusDuplicateSpanName.WithDetails(br)
 				if err != nil {
@@ -119,11 +119,21 @@ func AddSpans(ctx context.Context, uploadedSpans map[string]*cloudtrace.Span, lo
 				}
 				return st.Err()
 			}
-			uploadedSpans[span.Name] = span
+			*uploadedSpans = append(*uploadedSpans, span)
+			uploadedSpanNames[span.Name] = true
 		}
 	}
 
 	return nil
+}
+
+// AccessSpan returns the span at the given index if it is in range.
+// If it is not in range, an error is returned.
+func AccessSpan(index int, uploadedSpans []*cloudtrace.Span) (*cloudtrace.Span, error) {
+	if index >= len(uploadedSpans) {
+		return nil, statusInvalidSpanIndex
+	}
+	return uploadedSpans[index], nil
 }
 
 // ValidateProjectName verifies that the project name from the BatchWriteSpans request

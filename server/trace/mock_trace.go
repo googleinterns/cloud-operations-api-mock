@@ -32,7 +32,8 @@ import (
 type MockTraceServer struct {
 	cloudtrace.UnimplementedTraceServiceServer
 	mocktrace.UnimplementedMockTraceServiceServer
-	uploadedSpans     map[string]*cloudtrace.Span
+	uploadedSpanNames map[string]bool
+	uploadedSpans     []*cloudtrace.Span
 	uploadedSpansLock sync.Mutex
 	delay             time.Duration
 	delayLock         sync.Mutex
@@ -40,8 +41,8 @@ type MockTraceServer struct {
 
 // NewMockTraceServer creates a new MockTraceServer and returns a pointer to it.
 func NewMockTraceServer() *MockTraceServer {
-	uploadedSpans := make(map[string]*cloudtrace.Span)
-	return &MockTraceServer{uploadedSpans: uploadedSpans}
+	uploadedSpanNames := make(map[string]bool)
+	return &MockTraceServer{uploadedSpanNames: uploadedSpanNames}
 }
 
 // BatchWriteSpans creates and stores a list of spans on the server.
@@ -52,7 +53,7 @@ func (s *MockTraceServer) BatchWriteSpans(ctx context.Context, req *cloudtrace.B
 	if err := validation.ValidateSpans("BatchWriteSpans", req.Spans...); err != nil {
 		return nil, err
 	}
-	if err := validation.AddSpans(ctx, s.uploadedSpans, &s.uploadedSpansLock, s.delay, req.Spans...); err != nil {
+	if err := validation.AddSpans(&s.uploadedSpans, s.uploadedSpanNames, &s.uploadedSpansLock, s.delay, ctx, req.Spans...); err != nil {
 		return nil, err
 	}
 	return &empty.Empty{}, nil
@@ -63,7 +64,7 @@ func (s *MockTraceServer) CreateSpan(ctx context.Context, span *cloudtrace.Span)
 	if err := validation.ValidateSpans("CreateSpan", span); err != nil {
 		return nil, err
 	}
-	if err := validation.AddSpans(ctx, s.uploadedSpans, &s.uploadedSpansLock, s.delay, span); err != nil {
+	if err := validation.AddSpans(&s.uploadedSpans, s.uploadedSpanNames, &s.uploadedSpansLock, s.delay, ctx, span); err != nil {
 		return nil, err
 	}
 	return span, nil
@@ -84,4 +85,12 @@ func (s *MockTraceServer) SetDelay(ctx context.Context, req *mocktrace.SetDelayR
 	defer s.delayLock.Unlock()
 	s.delay = (time.Duration(req.Duration.Seconds) * time.Second) + time.Duration(req.Duration.Nanos)
 	return &empty.Empty{}, nil
+}
+
+// GetSpan returns the span that was stored in memory at the given index.
+func (s *MockTraceServer) GetSpan(ctx context.Context, req *mocktrace.GetSpanRequest) (*cloudtrace.Span, error) {
+	s.uploadedSpansLock.Lock()
+	defer s.uploadedSpansLock.Unlock()
+	span, err := validation.AccessSpan(int(req.Index), s.uploadedSpans)
+	return span, err
 }
