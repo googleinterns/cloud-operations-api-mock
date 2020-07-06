@@ -52,7 +52,7 @@ func (s *MockTraceServer) BatchWriteSpans(ctx context.Context, req *cloudtrace.B
 	if err := validation.ValidateSpans("BatchWriteSpans", req.Spans...); err != nil {
 		return nil, err
 	}
-	if err := validation.AddSpans(s.uploadedSpans, &s.uploadedSpansLock, s.delay, ctx, req.Spans...); err != nil {
+	if err := validation.AddSpans(ctx, s.uploadedSpans, &s.uploadedSpansLock, s.delay, req.Spans...); err != nil {
 		return nil, err
 	}
 	return &empty.Empty{}, nil
@@ -63,7 +63,7 @@ func (s *MockTraceServer) CreateSpan(ctx context.Context, span *cloudtrace.Span)
 	if err := validation.ValidateSpans("CreateSpan", span); err != nil {
 		return nil, err
 	}
-	if err := validation.AddSpans(s.uploadedSpans, &s.uploadedSpansLock, s.delay, ctx, span); err != nil {
+	if err := validation.AddSpans(ctx, s.uploadedSpans, &s.uploadedSpansLock, s.delay, span); err != nil {
 		return nil, err
 	}
 	return span, nil

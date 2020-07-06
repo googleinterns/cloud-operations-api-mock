@@ -81,23 +81,23 @@ func ValidateSpans(requestName string, spans ...*cloudtrace.Span) error {
 func validateTimeStamps(span *cloudtrace.Span) error {
 	start, err := ptypes.Timestamp(span.StartTime)
 	if err != nil {
-		return StatusMalformedTimestamp
+		return statusMalformedTimestamp
 	}
 	end, err := ptypes.Timestamp(span.EndTime)
 	if err != nil {
-		return StatusMalformedTimestamp
+		return statusMalformedTimestamp
 	}
 
 	if !start.Before(end) {
-		return StatusInvalidTimestamp
+		return statusInvalidTimestamp
 	}
 	return nil
 }
 
 // AddSpans adds the given spans to the map of uploaded spans as long as there are no duplicate names.
 // If a duplicate span name is detected, it will not be written, and an error is returned.
-func AddSpans(uploadedSpans map[string]*cloudtrace.Span, lock *sync.Mutex,
-	delay time.Duration, ctx context.Context, spans ...*cloudtrace.Span) error {
+func AddSpans(ctx context.Context, uploadedSpans map[string]*cloudtrace.Span, lock *sync.Mutex,
+	delay time.Duration, spans ...*cloudtrace.Span) error {
 
 	br := &errdetails.ErrorInfo{}
 
@@ -110,7 +110,7 @@ func AddSpans(uploadedSpans map[string]*cloudtrace.Span, lock *sync.Mutex,
 		for _, span := range spans {
 			if _, ok := uploadedSpans[span.Name]; ok {
 				br.Reason = span.Name
-				st, err := StatusDuplicateSpanName.WithDetails(br)
+				st, err := statusDuplicateSpanName.WithDetails(br)
 				if err != nil {
 					panic(fmt.Sprintf("unexpected error attaching metadata: %v", err))
 				}
@@ -127,7 +127,7 @@ func AddSpans(uploadedSpans map[string]*cloudtrace.Span, lock *sync.Mutex,
 // is of the form projects/[PROJECT_ID]
 func ValidateProjectName(projectName string) error {
 	if !projectNameRegex.MatchString(projectName) {
-		return StatusInvalidProjectName
+		return statusInvalidProjectName
 	}
 	return nil
 }
@@ -135,7 +135,7 @@ func ValidateProjectName(projectName string) error {
 // A display name can be at most 128 bytes.
 func validateDisplayName(displayName *cloudtrace.TruncatableString) error {
 	if len(displayName.Value) > maxDisplayNameBytes {
-		return StatusInvalidDisplayName
+		return statusInvalidDisplayName
 	}
 	return nil
 }
@@ -144,7 +144,7 @@ func validateDisplayName(displayName *cloudtrace.TruncatableString) error {
 // trace_id is a 32-char hex encoding, span_id is a 16-char hex encoding.
 func validateName(name string) error {
 	if !spanNameRegex.MatchString(name) {
-		return StatusInvalidSpanName
+		return statusInvalidSpanName
 	}
 	return nil
 }
@@ -157,16 +157,16 @@ func validateAttributes(attributes *cloudtrace.Span_Attributes, maxAttributes in
 		return nil
 	}
 	if len(attributes.AttributeMap) > maxAttributes {
-		return StatusTooManyAttributes
+		return statusTooManyAttributes
 	}
 
 	for k, v := range attributes.AttributeMap {
 		if len(k) > maxAttributeKeyBytes {
-			return StatusInvalidAttributeKey
+			return statusInvalidAttributeKey
 		}
 		if val, ok := v.Value.(*cloudtrace.AttributeValue_StringValue); ok {
 			if len(val.StringValue.Value) > maxAttributeValueBytes {
-				return StatusInvalidAttributeValue
+				return statusInvalidAttributeValue
 			}
 		}
 	}
@@ -183,26 +183,26 @@ func validateTimeEvents(events *cloudtrace.Span_TimeEvents) error {
 		return nil
 	}
 	if len(events.TimeEvent) > maxTimeEvents {
-		return StatusTooManyTimeEvents
+		return statusTooManyTimeEvents
 	}
 
 	for _, event := range events.TimeEvent {
 		if event.Time == nil {
-			return StatusTimeEventMissingTime
+			return statusTimeEventMissingTime
 		}
 
 		switch e := event.Value.(type) {
 		case *cloudtrace.Span_TimeEvent_Annotation_:
 			if len(e.Annotation.Description.Value) > maxAnnotationBytes {
-				return StatusInvalidAnnotation
+				return statusInvalidAnnotation
 			}
 
 			if err := validateAttributes(e.Annotation.Attributes, maxAnnotationAttributes); err != nil {
-				return StatusTooManyAnnotationAttributes
+				return err
 			}
 		case *cloudtrace.Span_TimeEvent_MessageEvent_:
 			if e.MessageEvent.Id <= 0 || e.MessageEvent.UncompressedSizeBytes <= 0 {
-				return StatusInvalidMessageEvent
+				return statusInvalidMessageEvent
 			}
 		}
 	}
@@ -217,12 +217,12 @@ func validateLinks(links *cloudtrace.Span_Links) error {
 		return nil
 	}
 	if len(links.Link) > maxLinks {
-		return StatusTooManyLinks
+		return statusTooManyLinks
 	}
 
 	for _, link := range links.Link {
 		if link.SpanId == "" || link.TraceId == "" {
-			return StatusInvalidLink
+			return statusInvalidLink
 		}
 		if err := validateAttributes(link.Attributes, maxAttributes); err != nil {
 			return err

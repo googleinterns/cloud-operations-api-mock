@@ -22,7 +22,6 @@ import (
 	"log"
 	"net"
 	"reflect"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -34,6 +33,8 @@ import (
 
 	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/proto"
 )
@@ -142,15 +143,15 @@ func generateHex(n int) (string, error) {
 }
 
 func generateSpanName(projectName string) string {
-	traceId, err := generateHex(16)
+	traceID, err := generateHex(16)
 	if err != nil {
 		log.Fatalf("failed to generate span name: %v", err)
 	}
-	spanId, err := generateHex(8)
+	spanID, err := generateHex(8)
 	if err != nil {
 		log.Fatalf("failed to generate span name: %v", err)
 	}
-	return fmt.Sprintf(spanNameFormat, projectName, traceId, spanId)
+	return fmt.Sprintf(spanNameFormat, projectName, traceID, spanID)
 }
 
 func TestMockTraceServer_BatchWriteSpans(t *testing.T) {
@@ -222,18 +223,12 @@ func TestMockTraceServer_BatchWriteSpans_InvalidTimestamp(t *testing.T) {
 		Name:  "projects/test-project",
 		Spans: invalidTimestampSpans,
 	}
-	want := validation.StatusInvalidTimestamp
+	want := codes.InvalidArgument
 
 	responseSpan, err := traceClient.BatchWriteSpans(ctx, in)
-	if err == nil {
+	if err == nil || status.Code(err) != want {
 		t.Errorf("BatchWriteSpans(%v) == %v, expected error %v",
 			in, responseSpan, want)
-		return
-	}
-
-	if !strings.Contains(err.Error(), want.Error()) {
-		t.Errorf("BatchWriteSpans(%v) returned error %v, expected error %v",
-			in, err.Error(), want)
 	}
 }
 
@@ -247,13 +242,12 @@ func TestMockTraceServer_BatchWriteSpans_DuplicateName(t *testing.T) {
 		duplicateSpan,
 	}
 	in := &cloudtrace.BatchWriteSpansRequest{Name: "projects/test-project", Spans: spans}
-	want := validation.StatusDuplicateSpanName
+	want := codes.AlreadyExists
 
 	responseSpan, err := traceClient.BatchWriteSpans(ctx, in)
-	if err == nil {
+	if err == nil || status.Code(err) != want {
 		t.Errorf("BatchWriteSpans(%v) == %v, expected error %v",
-			in, responseSpan, want.Err())
-		return
+			in, responseSpan, want)
 	}
 
 	if valid := validation.ValidateDuplicateSpanNames(err, duplicateSpan.Name); !valid {
@@ -308,18 +302,13 @@ func TestMockTraceServer_CreateSpan_InvalidTimestamp(t *testing.T) {
 	defer tearDown()
 
 	in := generateInvalidTimestampSpan()
-	want := validation.StatusInvalidTimestamp
+	want := codes.InvalidArgument
 
 	responseSpan, err := traceClient.CreateSpan(ctx, in)
-	if err == nil {
+	if err == nil || status.Code(err) != want {
 		t.Errorf("CreateSpan(%v) == %v, expected error %v",
 			in, responseSpan, want)
 		return
-	}
-
-	if !strings.Contains(err.Error(), want.Error()) {
-		t.Errorf("CreateSpan(%v) returned error %v, expected error %v",
-			in, err.Error(), want)
 	}
 }
 
@@ -327,22 +316,21 @@ func TestMockTraceServer_CreateSpan_DuplicateName(t *testing.T) {
 	setup()
 	defer tearDown()
 
-	const duplicateSpanName = "test-span-1"
-	in := generateSpan(duplicateSpanName)
-	want := validation.ErrDuplicateSpanName
+	duplicateSpan := generateSpan()
+	want := codes.AlreadyExists
 
-	_, err := traceClient.CreateSpan(ctx, in)
+	_, err := traceClient.CreateSpan(ctx, duplicateSpan)
 	if err != nil {
-		t.Errorf("CreateSpan(%v) returned error %v", in, err)
+		t.Errorf("CreateSpan(%v) returned error %v", duplicateSpan, err)
 	}
 
-	resp, err := traceClient.CreateSpan(ctx, in)
-	if err == nil {
-		t.Errorf("CreateSpan(%v) returned %v, expected error %v", in, resp, want)
+	resp, err := traceClient.CreateSpan(ctx, duplicateSpan)
+	if err == nil || status.Code(err) != want {
+		t.Errorf("CreateSpan(%v) returned %v, expected error %v", duplicateSpan, resp, want)
 	}
 
-	if valid := validation.ValidateDuplicateSpanNames(err, duplicateSpanName); !valid {
-		t.Errorf("expected duplicate spanName: %v", duplicateSpanName)
+	if valid := validation.ValidateDuplicateSpanNames(err, duplicateSpan.Name); !valid {
+		t.Errorf("expected duplicate spanName: %v", duplicateSpan.Name)
 	}
 }
 

@@ -23,35 +23,33 @@ import (
 
 var (
 	// Trace statuses.
-	StatusInvalidSpanName = status.Error(codes.InvalidArgument,
+	statusInvalidSpanName = status.Error(codes.InvalidArgument,
 		"span name must be of the form projects/{project_id}/traces/{trace_id}/spans/{span_id}")
-	StatusInvalidProjectName = status.Error(codes.InvalidArgument,
+	statusInvalidProjectName = status.Error(codes.InvalidArgument,
 		"project name must be of the form projects/{project_id}")
-	StatusInvalidTimestamp = status.Error(codes.InvalidArgument,
+	statusInvalidTimestamp = status.Error(codes.InvalidArgument,
 		"start time must be before end time")
-	StatusMalformedTimestamp = status.Error(codes.InvalidArgument,
+	statusMalformedTimestamp = status.Error(codes.InvalidArgument,
 		"unable to parse timestamp")
-	StatusTimeEventMissingTime = status.Error(codes.InvalidArgument,
+	statusTimeEventMissingTime = status.Error(codes.InvalidArgument,
 		"time events' time field cannot be empty")
-	StatusInvalidMessageEvent = status.Error(codes.InvalidArgument,
+	statusInvalidMessageEvent = status.Error(codes.InvalidArgument,
 		"message events must contain a type, ID and uncompressed size in bytes")
-	StatusInvalidLink = status.Error(codes.InvalidArgument,
+	statusInvalidLink = status.Error(codes.InvalidArgument,
 		"links must contain a Span ID and trace ID")
-	StatusInvalidDisplayName = status.Error(codes.InvalidArgument,
+	statusInvalidDisplayName = status.Error(codes.InvalidArgument,
 		fmt.Sprintf("displayName has max length of %v bytes", maxDisplayNameBytes))
-	StatusTooManyAttributes = status.Error(codes.InvalidArgument,
+	statusTooManyAttributes = status.Error(codes.InvalidArgument,
 		fmt.Sprintf("a span can have at most %v attributes", maxAttributes))
-	StatusInvalidAttributeKey = status.Error(codes.InvalidArgument,
+	statusInvalidAttributeKey = status.Error(codes.InvalidArgument,
 		fmt.Sprintf("attribute keys have a max length of %v bytes", maxAttributeKeyBytes))
-	StatusInvalidAttributeValue = status.Error(codes.InvalidArgument,
+	statusInvalidAttributeValue = status.Error(codes.InvalidArgument,
 		fmt.Sprintf("attribute values have a max length of %v bytes", maxAttributeValueBytes))
-	StatusTooManyTimeEvents = status.Error(codes.InvalidArgument,
+	statusTooManyTimeEvents = status.Error(codes.InvalidArgument,
 		fmt.Sprintf("a span can have at most %v time events", maxTimeEvents))
-	StatusInvalidAnnotation = status.Error(codes.InvalidArgument,
+	statusInvalidAnnotation = status.Error(codes.InvalidArgument,
 		fmt.Sprintf("annotation descriptions have a max length of %v bytes", maxAnnotationBytes))
-	StatusTooManyAnnotationAttributes = status.Error(codes.InvalidArgument,
-		fmt.Sprintf("annotations can have at most %v attributes", maxAnnotationAttributes))
-	StatusTooManyLinks = status.Error(codes.InvalidArgument,
+	statusTooManyLinks = status.Error(codes.InvalidArgument,
 		fmt.Sprintf("a span can have at most %v links", maxLinks))
-	StatusDuplicateSpanName = status.New(codes.AlreadyExists, "duplicate span name")
+	statusDuplicateSpanName = status.New(codes.AlreadyExists, "duplicate span name")
 )
