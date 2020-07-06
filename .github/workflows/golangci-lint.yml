@@ -17,4 +17,4 @@ jobs:
         with:
           version: v1.26
 
-          args: --disable-all
+          args: --disable-all -E errcheck
