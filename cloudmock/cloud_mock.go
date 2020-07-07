@@ -15,6 +15,7 @@
 package cloudmock
 
 import (
+	"context"
 	"log"
 	"net"
 	"time"
@@ -97,6 +98,12 @@ func (mock *CloudMock) ClientConn() *grpc.ClientConn {
 // writing spans to memory.
 func (mock *CloudMock) SetDelay(delay time.Duration) {
 	mock.mockTraceServer.SetDelay(delay)
+}
+
+// SetOnUpload allows users to set the onUpload function on the mock server,
+// which is called before BatchWriteSpans runs.
+func (mock *CloudMock) SetOnUpload(onUpload func(ctx context.Context, spans []*cloudtrace.Span)) {
+	mock.mockTraceServer.SetOnUpload(onUpload)
 }
 
 // Shutdown closes the connections and shuts down the gRPC server.
