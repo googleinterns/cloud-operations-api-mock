@@ -93,6 +93,8 @@ func (mock *CloudMock) ClientConn() *grpc.ClientConn {
 	return mock.conn
 }
 
+// SetDelay allows users to set the amount of time to delay before
+// writing spans to memory.
 func (mock *CloudMock) SetDelay(delay time.Duration) {
 	mock.mockTraceServer.SetDelay(delay)
 }
