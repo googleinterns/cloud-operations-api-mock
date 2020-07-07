@@ -90,11 +90,10 @@ func (s *MockTraceServer) GetNumSpans(ctx context.Context, req *empty.Empty) (*m
 }
 
 // SetDelay sets the amount of time to delay before writing the spans to memory.
-func (s *MockTraceServer) SetDelay(ctx context.Context, req *mocktrace.SetDelayRequest) (*empty.Empty, error) {
+func (s *MockTraceServer) SetDelay(delay time.Duration) {
 	s.delayLock.Lock()
 	defer s.delayLock.Unlock()
-	s.delay = (time.Duration(req.Duration.Seconds) * time.Second) + time.Duration(req.Duration.Nanos)
-	return &empty.Empty{}, nil
+	s.delay = delay
 }
 
 // GetSpan returns the span that was stored in memory at the given index.

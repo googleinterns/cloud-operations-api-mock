@@ -17,6 +17,7 @@ package cloudmock
 import (
 	"log"
 	"net"
+	"time"
 
 	mocktrace "github.com/googleinterns/cloud-operations-api-mock/api"
 	"github.com/googleinterns/cloud-operations-api-mock/server/metric"
@@ -33,12 +34,13 @@ import (
 type CloudMock struct {
 	conn                   *grpc.ClientConn
 	grpcServer             *grpc.Server
+	mockTraceServer        *trace.MockTraceServer
 	TraceServiceClient     cloudtrace.TraceServiceClient
 	MockTraceServiceClient mocktrace.MockTraceServiceClient
 	MetricServiceClient    monitoring.MetricServiceClient
 }
 
-func startMockServer() (string, *grpc.Server) {
+func startMockServer() (string, *grpc.Server, *trace.MockTraceServer) {
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		log.Fatalf("mock server failed to listen: %v", err)
@@ -59,13 +61,13 @@ func startMockServer() (string, *grpc.Server) {
 		}
 	}()
 
-	return lis.Addr().String(), grpcServer
+	return lis.Addr().String(), grpcServer, mockTrace
 }
 
 // NewCloudMock is the constructor for the CloudMock struct, it will return a
 // pointer to a new CloudMock.
 func NewCloudMock() *CloudMock {
-	address, grpcServer := startMockServer()
+	address, grpcServer, mockTrace := startMockServer()
 
 	conn, err := grpc.Dial(address, grpc.WithInsecure())
 	if err != nil {
@@ -78,6 +80,7 @@ func NewCloudMock() *CloudMock {
 	return &CloudMock{
 		conn,
 		grpcServer,
+		mockTrace,
 		traceClient,
 		mockTraceClient,
 		metricClient,
@@ -88,6 +91,10 @@ func NewCloudMock() *CloudMock {
 // to provide the exporters with the address of our mock server.
 func (mock *CloudMock) ClientConn() *grpc.ClientConn {
 	return mock.conn
+}
+
+func (mock *CloudMock) SetDelay(delay time.Duration) {
+	mock.mockTraceServer.SetDelay(delay)
 }
 
 // Shutdown closes the connections and shuts down the gRPC server.
