@@ -17,4 +17,4 @@ jobs:
         with:
           version: v1.26
 
-          args: --disable-all -E golint -E gofmt -E whitespace
+          args: -v -E golint -E gofmt -E whitespace
