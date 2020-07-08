@@ -385,7 +385,7 @@ func TestMockTraceServer_GetSpan(t *testing.T) {
 	setup()
 	defer tearDown()
 
-	in := generateSpan("test-span-1")
+	in := generateSpan()
 
 	_, err := traceClient.CreateSpan(ctx, in)
 	if err != nil {
