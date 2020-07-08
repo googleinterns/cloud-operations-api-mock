@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"regexp"
 	"sync"
 	"time"
 
@@ -25,48 +26,81 @@ import (
 
 	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-var (
-	ErrInvalidTimestamp   = status.Error(codes.InvalidArgument, "start time must be before end time")
-	ErrMalformedTimestamp = status.Error(codes.InvalidArgument, "unable to parse timestamp")
-	ErrDuplicateSpanName  = status.New(codes.AlreadyExists, "duplicate span name")
-	requiredFields        = []string{"Name", "SpanId", "DisplayName", "StartTime", "EndTime"}
+const (
+	// These restrictions can be found at
+	// https://cloud.google.com/trace/docs/reference/v2/rpc/google.devtools.cloudtrace.v2
+	maxAnnotationAttributes = 4
+	maxAnnotationBytes      = 256
+	maxAttributes           = 32
+	maxAttributeKeyBytes    = 128
+	maxAttributeValueBytes  = 256
+	maxDisplayNameBytes     = 128
+	maxLinks                = 128
+	maxTimeEvents           = 32
 )
 
+var (
+	requiredFields   = []string{"Name", "SpanId", "DisplayName", "StartTime", "EndTime"}
+	spanNameRegex    = regexp.MustCompile("^projects/[^/]+/traces/[a-fA-F0-9]{32}/spans/[a-fA-F0-9]{16}$")
+	projectNameRegex = regexp.MustCompile("^projects/[^/]+$")
+)
+
+// ValidateSpans checks that the spans conform to the API requirements.
+// That is, required fields are present, and optional fields are of the correct form.
 func ValidateSpans(requestName string, spans ...*cloudtrace.Span) error {
 	for _, span := range spans {
+		// Validate required fields are present and semantically make sense.
 		if err := CheckForRequiredFields(requiredFields, reflect.ValueOf(span), requestName); err != nil {
 			return err
 		}
-
+		if err := validateName(span.Name); err != nil {
+			return err
+		}
 		if err := validateTimeStamps(span); err != nil {
+			return err
+		}
+		if err := validateDisplayName(span.DisplayName); err != nil {
+			return err
+		}
+
+		// Validate that if optional fields are present, they conform to the API.
+		if err := validateAttributes(span.Attributes, maxAttributes); err != nil {
+			return err
+		}
+		if err := validateTimeEvents(span.TimeEvents); err != nil {
+			return err
+		}
+		if err := validateLinks(span.Links); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+// validateTimeStamps verifies that the start time of a span is before its end time.
 func validateTimeStamps(span *cloudtrace.Span) error {
 	start, err := ptypes.Timestamp(span.StartTime)
 	if err != nil {
-		return ErrMalformedTimestamp
+		return statusMalformedTimestamp
 	}
 	end, err := ptypes.Timestamp(span.EndTime)
 	if err != nil {
-		return ErrMalformedTimestamp
+		return statusMalformedTimestamp
 	}
 
 	if !start.Before(end) {
-		return ErrInvalidTimestamp
+		return statusInvalidTimestamp
 	}
 	return nil
 }
 
-func AddSpans(uploadedSpans map[string]*cloudtrace.Span, lock *sync.Mutex,
-	delay time.Duration, ctx context.Context, spans ...*cloudtrace.Span) error {
+// AddSpans adds the given spans to the map of uploaded spans as long as there are no duplicate names.
+// If a duplicate span name is detected, it will not be written, and an error is returned.
+func AddSpans(ctx context.Context, uploadedSpans map[string]*cloudtrace.Span, lock *sync.Mutex,
+	delay time.Duration, spans ...*cloudtrace.Span) error {
 
 	br := &errdetails.ErrorInfo{}
 
@@ -79,7 +113,7 @@ func AddSpans(uploadedSpans map[string]*cloudtrace.Span, lock *sync.Mutex,
 		for _, span := range spans {
 			if _, ok := uploadedSpans[span.Name]; ok {
 				br.Reason = span.Name
-				st, err := ErrDuplicateSpanName.WithDetails(br)
+				st, err := statusDuplicateSpanName.WithDetails(br)
 				if err != nil {
 					panic(fmt.Sprintf("unexpected error attaching metadata: %v", err))
 				}
@@ -92,6 +126,118 @@ func AddSpans(uploadedSpans map[string]*cloudtrace.Span, lock *sync.Mutex,
 	return nil
 }
 
+// ValidateProjectName verifies that the project name from the BatchWriteSpans request
+// is of the form projects/[PROJECT_ID]
+func ValidateProjectName(projectName string) error {
+	if !projectNameRegex.MatchString(projectName) {
+		return statusInvalidProjectName
+	}
+	return nil
+}
+
+// validateDisplayName verifies that the display name has at most 128 bytes.
+func validateDisplayName(displayName *cloudtrace.TruncatableString) error {
+	if len(displayName.Value) > maxDisplayNameBytes {
+		return statusInvalidDisplayName
+	}
+	return nil
+}
+
+// validateName verifies that the span is of the form:
+// projects/{project_id}/traces/{trace_id}/spans/{span_id}
+// where trace_id is a 32-char hex encoding, and span_id is a 16-char hex encoding.
+func validateName(name string) error {
+	if !spanNameRegex.MatchString(name) {
+		return statusInvalidSpanName
+	}
+	return nil
+}
+
+// validateAttributes verifies that a span has at most 32 attributes, where each attribute is a dictionary.
+// The key is a string with max length of 128 bytes, and the value can be a string, int64 or bool.
+// If the value is a string, it has a max length of 256 bytes.
+func validateAttributes(attributes *cloudtrace.Span_Attributes, maxAttributes int) error {
+	if attributes == nil {
+		return nil
+	}
+	if len(attributes.AttributeMap) > maxAttributes {
+		return statusTooManyAttributes
+	}
+
+	for k, v := range attributes.AttributeMap {
+		if len(k) > maxAttributeKeyBytes {
+			return statusInvalidAttributeKey
+		}
+		if val, ok := v.Value.(*cloudtrace.AttributeValue_StringValue); ok {
+			if len(val.StringValue.Value) > maxAttributeValueBytes {
+				return statusInvalidAttributeValue
+			}
+		}
+	}
+
+	return nil
+}
+
+// validateTimeEvents verifies that a span has at most 32 TimeEvents.
+// A TimeEvent consists of a TimeStamp, and either an Annotation or a MessageEvent.
+// An Annotation is a dictionary that maps a string description to a list of attributes.
+// A MessageEvent describes messages sent between spans and must contain an ID and size.
+func validateTimeEvents(events *cloudtrace.Span_TimeEvents) error {
+	if events == nil {
+		return nil
+	}
+	if len(events.TimeEvent) > maxTimeEvents {
+		return statusTooManyTimeEvents
+	}
+
+	for _, event := range events.TimeEvent {
+		if event.Time == nil {
+			return statusTimeEventMissingTime
+		}
+
+		switch e := event.Value.(type) {
+		case *cloudtrace.Span_TimeEvent_Annotation_:
+			if len(e.Annotation.Description.Value) > maxAnnotationBytes {
+				return statusInvalidAnnotation
+			}
+
+			if err := validateAttributes(e.Annotation.Attributes, maxAnnotationAttributes); err != nil {
+				return err
+			}
+		case *cloudtrace.Span_TimeEvent_MessageEvent_:
+			if e.MessageEvent.Id <= 0 || e.MessageEvent.UncompressedSizeBytes <= 0 {
+				return statusInvalidMessageEvent
+			}
+		}
+	}
+
+	return nil
+}
+
+// validateLinks verifies that a span has at most 128 links, which are used to link the span to another span.
+// A link contains a traceId, spanId, the type of the span, and at most 32 attributes.
+func validateLinks(links *cloudtrace.Span_Links) error {
+	if links == nil {
+		return nil
+	}
+	if len(links.Link) > maxLinks {
+		return statusTooManyLinks
+	}
+
+	for _, link := range links.Link {
+		if link.SpanId == "" || link.TraceId == "" {
+			return statusInvalidLink
+		}
+		if err := validateAttributes(link.Attributes, maxAttributes); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ValidateDuplicateSpanNames is used in tests to verify that the error returned
+// contains the correct span name (that is, the duplicate span name).
 func ValidateDuplicateSpanNames(err error, duplicateName string) bool {
 	st := status.Convert(err)
 	for _, detail := range st.Details() {
