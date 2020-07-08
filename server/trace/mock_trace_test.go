@@ -22,7 +22,6 @@ import (
 	"log"
 	"net"
 	"reflect"
-	"sync"
 	"testing"
 	"time"
 
@@ -192,14 +191,14 @@ func TestMockTraceServer_BatchWriteSpans_MissingField(t *testing.T) {
 		Name:  "projects/test-project",
 		Spans: missingFieldsSpan,
 	}
-	want := validation.ErrMissingField.Err()
+	want := codes.InvalidArgument
 	missingFields := map[string]struct{}{
 		"Name":      {},
 		"StartTime": {},
 	}
 
 	responseSpan, err := traceClient.BatchWriteSpans(ctx, in)
-	if err == nil {
+	if err == nil || status.Code(err) != want {
 		t.Errorf("BatchWriteSpans(%v) == %v, expected error %v",
 			in, responseSpan, want)
 		return
@@ -279,14 +278,14 @@ func TestMockTraceServer_CreateSpan_MissingFields(t *testing.T) {
 	defer tearDown()
 
 	in := generateMissingFieldSpan("SpanId", "EndTime")
-	want := validation.ErrMissingField.Err()
+	want := codes.InvalidArgument
 	missingFields := map[string]struct{}{
 		"SpanId":  {},
 		"EndTime": {},
 	}
 
 	responseSpan, err := traceClient.CreateSpan(ctx, in)
-	if err == nil {
+	if err == nil || status.Code(err) != want {
 		t.Errorf("CreateSpan(%v) == %v, expected error %v",
 			in, responseSpan, want)
 		return
@@ -338,7 +337,6 @@ func TestMockTraceServer_GetNumSpans(t *testing.T) {
 	setup()
 	defer tearDown()
 
-	var wg sync.WaitGroup
 	const expectedNumSpans = 6
 	spans1 := []*cloudtrace.Span{
 		generateSpan(),
@@ -352,23 +350,27 @@ func TestMockTraceServer_GetNumSpans(t *testing.T) {
 		generateSpan(),
 	}
 
+	errChan := make(chan error)
 	go func() {
-		wg.Add(1)
-		defer wg.Done()
 		_, err := traceClient.BatchWriteSpans(ctx, &cloudtrace.BatchWriteSpansRequest{
 			Name:  "projects/test-project",
 			Spans: spans1,
 		})
-		if err != nil {
-			t.Fatalf("failed to call BatchWriteSpans: %v", err)
-		}
+		errChan <- err
 	}()
 
 	_, err := traceClient.BatchWriteSpans(ctx, &cloudtrace.BatchWriteSpansRequest{
 		Name:  "projects/test-project",
 		Spans: spans2,
 	})
-	wg.Wait()
+	if err != nil {
+		t.Fatalf("failed to call BatchWriteSpans: %v", err)
+	}
+
+	// Wait for goroutine to finish.
+	if err := <-errChan; err != nil {
+		t.Fatalf("failed to call BatchWriteSpans: %v", err)
+	}
 
 	numSpansResp, err := mockClient.GetNumSpans(ctx, &empty.Empty{})
 	if err != nil {

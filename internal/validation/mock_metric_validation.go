@@ -22,15 +22,10 @@ import (
 	"google.golang.org/genproto/googleapis/api/metric"
 	"google.golang.org/genproto/googleapis/monitoring/v3"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
-var (
-	StatusDuplicateMetricDescriptorName = status.New(codes.AlreadyExists, "metric descriptor with same name already exists")
-	StatusMetricDescriptorNotFound      = status.New(codes.NotFound, "metric descriptor with given name does not exist")
-)
-
+// IsValidRequest verifies that the given request is valid.
+// This means required fields are present and all fields semantically make sense.
 func IsValidRequest(req interface{}) error {
 	reqReflect := reflect.ValueOf(req)
 	requiredFields := []string{"Name"}
@@ -60,6 +55,8 @@ func IsValidRequest(req interface{}) error {
 	return CheckForRequiredFields(requiredFields, reqReflect, requestName)
 }
 
+// AddMetricDescriptor adds a new MetricDescriptor to the map if a duplicate does not already exist.
+// If a duplciate is detected, an error is returned.
 func AddMetricDescriptor(lock *sync.Mutex, uploadedMetricDescriptors map[string]*metric.MetricDescriptor, name string, metricDescriptor *metric.MetricDescriptor) error {
 	lock.Lock()
 	defer lock.Unlock()
@@ -67,7 +64,7 @@ func AddMetricDescriptor(lock *sync.Mutex, uploadedMetricDescriptors map[string]
 	if _, ok := uploadedMetricDescriptors[name]; ok {
 		br := &errdetails.ErrorInfo{}
 		br.Reason = name
-		st, err := StatusDuplicateMetricDescriptorName.WithDetails(br)
+		st, err := statusDuplicateMetricDescriptorName.WithDetails(br)
 		if err != nil {
 			panic(fmt.Sprintf("unexpected error attaching metadata: %v", err))
 		}
@@ -79,6 +76,8 @@ func AddMetricDescriptor(lock *sync.Mutex, uploadedMetricDescriptors map[string]
 	return nil
 }
 
+// AccessMetricDescriptor attempts to retrieve the given metric descriptor.
+// If it does not exist, an error is returned.
 func AccessMetricDescriptor(lock *sync.Mutex, uploadedMetricDescriptors map[string]*metric.MetricDescriptor, name string) (*metric.MetricDescriptor, error) {
 	lock.Lock()
 	defer lock.Unlock()
@@ -86,7 +85,7 @@ func AccessMetricDescriptor(lock *sync.Mutex, uploadedMetricDescriptors map[stri
 	if _, ok := uploadedMetricDescriptors[name]; !ok {
 		br := &errdetails.ErrorInfo{}
 		br.Reason = name
-		st, err := StatusMetricDescriptorNotFound.WithDetails(br)
+		st, err := statusMetricDescriptorNotFound.WithDetails(br)
 		if err != nil {
 			panic(fmt.Sprintf("unexpected error attaching metadata: %v", err))
 		}
@@ -96,6 +95,8 @@ func AccessMetricDescriptor(lock *sync.Mutex, uploadedMetricDescriptors map[stri
 	return uploadedMetricDescriptors[name], nil
 }
 
+// RemoveMetricDescriptor attempts to delete the given metric descriptor.
+// If it does not exist, an error is returned.
 func RemoveMetricDescriptor(lock *sync.Mutex, uploadedMetricDescriptors map[string]*metric.MetricDescriptor, name string) error {
 	lock.Lock()
 	defer lock.Unlock()
@@ -103,7 +104,7 @@ func RemoveMetricDescriptor(lock *sync.Mutex, uploadedMetricDescriptors map[stri
 	if _, ok := uploadedMetricDescriptors[name]; !ok {
 		br := &errdetails.ErrorInfo{}
 		br.Reason = name
-		st, err := StatusMetricDescriptorNotFound.WithDetails(br)
+		st, err := statusMetricDescriptorNotFound.WithDetails(br)
 		if err != nil {
 			panic(fmt.Sprintf("unexpected error attaching metadata: %v", err))
 		}
