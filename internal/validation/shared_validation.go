@@ -19,18 +19,14 @@ import (
 	"reflect"
 
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-)
-
-var (
-	ErrMissingField = status.New(codes.InvalidArgument, "missing required field(s)")
 )
 
 const (
 	missingFieldMsg = "%v must contain the required %v field"
 )
 
+// CheckForRequiredFields verifies that the required fields for the given request are present.
 func CheckForRequiredFields(requiredFields []string, reqReflect reflect.Value, requestName string) error {
 	br := &errdetails.BadRequest{}
 
@@ -45,7 +41,7 @@ func CheckForRequiredFields(requiredFields []string, reqReflect reflect.Value, r
 	}
 
 	if len(br.FieldViolations) > 0 {
-		st, err := ErrMissingField.WithDetails(br)
+		st, err := statusMissingField.WithDetails(br)
 		if err != nil {
 			panic(fmt.Sprintf("unexpected error attaching metadata: %v", err))
 		}
@@ -54,6 +50,7 @@ func CheckForRequiredFields(requiredFields []string, reqReflect reflect.Value, r
 	return nil
 }
 
+// ValidateErrDetails is used to test that the error details contain the correct missing fields.
 func ValidateErrDetails(err error, missingFields map[string]struct{}) bool {
 	st := status.Convert(err)
 	for _, detail := range st.Details() {

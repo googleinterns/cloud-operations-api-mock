@@ -27,6 +27,9 @@ import (
 	"google.golang.org/grpc"
 )
 
+// CloudMock is the struct we will expose to users to use in their tests.
+// It contains the gRPC clients for users to call, as well as the connection
+// info to allow a graceful shutdown after the tests run.
 type CloudMock struct {
 	conn                   *grpc.ClientConn
 	grpcServer             *grpc.Server
@@ -59,6 +62,8 @@ func startMockServer() (string, *grpc.Server) {
 	return lis.Addr().String(), grpcServer
 }
 
+// NewCloudMock is the constructor for the CloudMock struct, it will return a
+// pointer to a new CloudMock.
 func NewCloudMock() *CloudMock {
 	address, grpcServer := startMockServer()
 
@@ -79,10 +84,13 @@ func NewCloudMock() *CloudMock {
 	}
 }
 
+// ClientConn is a getter to retrieve the client connection. This is used
+// to provide the exporters with the address of our mock server.
 func (mock *CloudMock) ClientConn() *grpc.ClientConn {
 	return mock.conn
 }
 
+// Shutdown closes the connections and shuts down the gRPC server.
 func (mock *CloudMock) Shutdown() {
 	if err := mock.conn.Close(); err != nil {
 		log.Fatalf("failed to close connection: %s", err)

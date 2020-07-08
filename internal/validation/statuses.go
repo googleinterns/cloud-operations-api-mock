@@ -53,4 +53,11 @@ var (
 	statusTooManyLinks = status.Error(codes.InvalidArgument,
 		fmt.Sprintf("a span can have at most %v links", maxLinks))
 	statusDuplicateSpanName = status.New(codes.AlreadyExists, "duplicate span name")
+
+	// Metric statuses.
+	statusDuplicateMetricDescriptorName = status.New(codes.AlreadyExists, "metric descriptor with same name already exists")
+	statusMetricDescriptorNotFound      = status.New(codes.NotFound, "metric descriptor with given name does not exist")
+
+	// Shared statuses.
+	statusMissingField = status.New(codes.InvalidArgument, "missing required field(s)")
 )
