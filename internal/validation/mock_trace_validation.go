@@ -30,6 +30,8 @@ import (
 )
 
 const (
+	// These restrictions can be found at
+	// https://cloud.google.com/trace/docs/reference/v2/rpc/google.devtools.cloudtrace.v2
 	maxAnnotationAttributes = 4
 	maxAnnotationBytes      = 256
 	maxAttributes           = 32
@@ -42,8 +44,8 @@ const (
 
 var (
 	requiredFields   = []string{"Name", "SpanId", "DisplayName", "StartTime", "EndTime"}
-	spanNameRegex    = regexp.MustCompile("^projects/(.*)/traces/[a-fA-F0-9]{32}/spans/[a-fA-F0-9]{16}")
-	projectNameRegex = regexp.MustCompile("^projects/(.*)")
+	spanNameRegex    = regexp.MustCompile("^projects/[^/]+/traces/[a-fA-F0-9]{32}/spans/[a-fA-F0-9]{16}$")
+	projectNameRegex = regexp.MustCompile("^projects/[^/]+$")
 )
 
 // ValidateSpans checks that the spans conform to the API requirements.
@@ -78,6 +80,7 @@ func ValidateSpans(requestName string, spans ...*cloudtrace.Span) error {
 	return nil
 }
 
+// validateTimeStamps verifies that the start time of a span is before its end time.
 func validateTimeStamps(span *cloudtrace.Span) error {
 	start, err := ptypes.Timestamp(span.StartTime)
 	if err != nil {
@@ -132,7 +135,7 @@ func ValidateProjectName(projectName string) error {
 	return nil
 }
 
-// A display name can be at most 128 bytes.
+// validateDisplayName verifies that the display name has at most 128 bytes.
 func validateDisplayName(displayName *cloudtrace.TruncatableString) error {
 	if len(displayName.Value) > maxDisplayNameBytes {
 		return statusInvalidDisplayName
@@ -140,8 +143,9 @@ func validateDisplayName(displayName *cloudtrace.TruncatableString) error {
 	return nil
 }
 
-// The span name must be of the form projects/{project_id}/traces/{trace_id}/spans/{span_id} where
-// trace_id is a 32-char hex encoding, span_id is a 16-char hex encoding.
+// validateName verifies that the span is of the form:
+// projects/{project_id}/traces/{trace_id}/spans/{span_id}
+// where trace_id is a 32-char hex encoding, and span_id is a 16-char hex encoding.
 func validateName(name string) error {
 	if !spanNameRegex.MatchString(name) {
 		return statusInvalidSpanName
@@ -149,7 +153,7 @@ func validateName(name string) error {
 	return nil
 }
 
-// A span can have at most 32 attributes, where each attribute is a dictionary.
+// validateAttributes verifies that a span has at most 32 attributes, where each attribute is a dictionary.
 // The key is a string with max length of 128 bytes, and the value can be a string, int64 or bool.
 // If the value is a string, it has a max length of 256 bytes.
 func validateAttributes(attributes *cloudtrace.Span_Attributes, maxAttributes int) error {
@@ -174,8 +178,8 @@ func validateAttributes(attributes *cloudtrace.Span_Attributes, maxAttributes in
 	return nil
 }
 
-// A span can have at most 32 TimeEvents. A TimeEvent consists of a TimeStamp,
-// and either an Annotation or a MessageEvent.
+// validateTimeEvents verifies that a span has at most 32 TimeEvents.
+// A TimeEvent consists of a TimeStamp, and either an Annotation or a MessageEvent.
 // An Annotation is a dictionary that maps a string description to a list of attributes.
 // A MessageEvent describes messages sent between spans and must contain an ID and size.
 func validateTimeEvents(events *cloudtrace.Span_TimeEvents) error {
@@ -210,7 +214,7 @@ func validateTimeEvents(events *cloudtrace.Span_TimeEvents) error {
 	return nil
 }
 
-// A span can have at most 128 links, which links the span to another span.
+// validateLinks verifies that a span has at most 128 links, which are used to link the span to another span.
 // A link contains a traceId, spanId, the type of the span, and at most 32 attributes.
 func validateLinks(links *cloudtrace.Span_Links) error {
 	if links == nil {
