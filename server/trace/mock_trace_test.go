@@ -380,3 +380,31 @@ func TestMockTraceServer_GetNumSpans(t *testing.T) {
 		t.Errorf("GetNumSpans() == %v, expected %v", numSpansResp.NumSpans, expectedNumSpans)
 	}
 }
+
+func TestMockTraceServer_GetSpan(t *testing.T) {
+	setup()
+	defer tearDown()
+
+	in := generateSpan()
+
+	_, err := traceClient.CreateSpan(ctx, in)
+	if err != nil {
+		t.Errorf("failed to call GetSpan: %v", err)
+	}
+
+	index := 0
+	span, err := mockClient.GetSpan(ctx, &mocktrace.GetSpanRequest{Index: int32(index)})
+	if err != nil {
+		t.Errorf("GetSpan(%v) returned error %v, expected %v", index, err, in)
+	}
+	if !proto.Equal(in, span) {
+		t.Errorf("GetSpan(%v) == %v, expected %v", index, span, in)
+	}
+
+	invalidIndex := 1
+	want := codes.OutOfRange
+	span, err = mockClient.GetSpan(ctx, &mocktrace.GetSpanRequest{Index: int32(invalidIndex)})
+	if err == nil || status.Code(err) != want {
+		t.Errorf("GetSpan(%v) == %v, expected error %v", invalidIndex, span, want)
+	}
+}

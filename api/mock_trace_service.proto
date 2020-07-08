@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package api;
 
+import "google/devtools/cloudtrace/v2/trace.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/empty.proto";
 
@@ -17,8 +18,15 @@ message SetDelayRequest {
     google.protobuf.Duration duration = 1;
 }
 
+// Next available id: 2
+message GetSpanRequest {
+    int32 index = 1;
+}
+
 service MockTraceService {
     rpc GetNumSpans(google.protobuf.Empty) returns (GetNumSpansResponse) {}
 
     rpc SetDelay(SetDelayRequest) returns (google.protobuf.Empty) {}
+
+    rpc GetSpan(GetSpanRequest) returns (google.devtools.cloudtrace.v2.Span) {}
 }

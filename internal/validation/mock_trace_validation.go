@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
-	"sync"
 	"time"
 
 	"github.com/golang/protobuf/ptypes"
@@ -80,50 +79,45 @@ func ValidateSpans(requestName string, spans ...*cloudtrace.Span) error {
 	return nil
 }
 
-// validateTimeStamps verifies that the start time of a span is before its end time.
-func validateTimeStamps(span *cloudtrace.Span) error {
-	start, err := ptypes.Timestamp(span.StartTime)
-	if err != nil {
-		return statusMalformedTimestamp
-	}
-	end, err := ptypes.Timestamp(span.EndTime)
-	if err != nil {
-		return statusMalformedTimestamp
+// AddSpans adds the given spans to the list of uploaded spans as long as there are no duplicate names.
+// If a duplicate span name is detected, it will not be written, and an error is returned.
+func AddSpans(uploadedSpans *[]*cloudtrace.Span, uploadedSpanNames map[string]struct{}, spans ...*cloudtrace.Span) error {
+	br := &errdetails.ErrorInfo{}
+
+	for _, span := range spans {
+		if _, ok := uploadedSpanNames[span.Name]; ok {
+			br.Reason = span.Name
+			st, err := statusDuplicateSpanName.WithDetails(br)
+			if err != nil {
+				panic(fmt.Sprintf("unexpected error attaching metadata: %v", err))
+			}
+			return st.Err()
+		}
+		*uploadedSpans = append(*uploadedSpans, span)
+		uploadedSpanNames[span.Name] = struct{}{}
 	}
 
-	if !start.Before(end) {
-		return statusInvalidTimestamp
-	}
 	return nil
 }
 
-// AddSpans adds the given spans to the map of uploaded spans as long as there are no duplicate names.
-// If a duplicate span name is detected, it will not be written, and an error is returned.
-func AddSpans(ctx context.Context, uploadedSpans map[string]*cloudtrace.Span, lock *sync.Mutex,
-	delay time.Duration, spans ...*cloudtrace.Span) error {
-
-	br := &errdetails.ErrorInfo{}
-
+// Delay will block for the specified amount of time.
+// Used to delay writing spans to memory.
+func Delay(ctx context.Context, delay time.Duration) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-time.After(delay):
-		lock.Lock()
-		defer lock.Unlock()
-		for _, span := range spans {
-			if _, ok := uploadedSpans[span.Name]; ok {
-				br.Reason = span.Name
-				st, err := statusDuplicateSpanName.WithDetails(br)
-				if err != nil {
-					panic(fmt.Sprintf("unexpected error attaching metadata: %v", err))
-				}
-				return st.Err()
-			}
-			uploadedSpans[span.Name] = span
-		}
+		return nil
 	}
+}
 
-	return nil
+// AccessSpan returns the span at the given index if it is in range.
+// If it is not in range, an error is returned.
+func AccessSpan(index int, uploadedSpans []*cloudtrace.Span) (*cloudtrace.Span, error) {
+	if index >= len(uploadedSpans) {
+		return nil, statusInvalidSpanIndex
+	}
+	return uploadedSpans[index], nil
 }
 
 // ValidateProjectName verifies that the project name from the BatchWriteSpans request
@@ -149,6 +143,23 @@ func validateDisplayName(displayName *cloudtrace.TruncatableString) error {
 func validateName(name string) error {
 	if !spanNameRegex.MatchString(name) {
 		return statusInvalidSpanName
+	}
+	return nil
+}
+
+// validateTimeStamps verifies that the start time of a span is before its end time.
+func validateTimeStamps(span *cloudtrace.Span) error {
+	start, err := ptypes.Timestamp(span.StartTime)
+	if err != nil {
+		return statusMalformedTimestamp
+	}
+	end, err := ptypes.Timestamp(span.EndTime)
+	if err != nil {
+		return statusMalformedTimestamp
+	}
+
+	if !start.Before(end) {
+		return statusInvalidTimestamp
 	}
 	return nil
 }
