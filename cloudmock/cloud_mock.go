@@ -20,7 +20,6 @@ import (
 	"net"
 	"time"
 
-	mocktrace "github.com/googleinterns/cloud-operations-api-mock/api"
 	"github.com/googleinterns/cloud-operations-api-mock/server/metric"
 	"github.com/googleinterns/cloud-operations-api-mock/server/trace"
 
@@ -33,12 +32,11 @@ import (
 // It contains the gRPC clients for users to call, as well as the connection
 // info to allow a graceful shutdown after the tests run.
 type CloudMock struct {
-	conn                   *grpc.ClientConn
-	grpcServer             *grpc.Server
-	mockTraceServer        *trace.MockTraceServer
-	TraceServiceClient     cloudtrace.TraceServiceClient
-	MockTraceServiceClient mocktrace.MockTraceServiceClient
-	MetricServiceClient    monitoring.MetricServiceClient
+	conn                *grpc.ClientConn
+	grpcServer          *grpc.Server
+	mockTraceServer     *trace.MockTraceServer
+	TraceServiceClient  cloudtrace.TraceServiceClient
+	MetricServiceClient monitoring.MetricServiceClient
 }
 
 func startMockServer() (string, *grpc.Server, *trace.MockTraceServer) {
@@ -49,12 +47,8 @@ func startMockServer() (string, *grpc.Server, *trace.MockTraceServer) {
 
 	grpcServer := grpc.NewServer()
 	mockTrace := trace.NewMockTraceServer()
-
 	cloudtrace.RegisterTraceServiceServer(grpcServer, mockTrace)
-	mocktrace.RegisterMockTraceServiceServer(grpcServer, mockTrace)
 	monitoring.RegisterMetricServiceServer(grpcServer, metric.NewMockMetricServer())
-
-	log.Printf("Listening on %s\n", lis.Addr().String())
 
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
@@ -76,14 +70,12 @@ func NewCloudMock() *CloudMock {
 	}
 
 	traceClient := cloudtrace.NewTraceServiceClient(conn)
-	mockTraceClient := mocktrace.NewMockTraceServiceClient(conn)
 	metricClient := monitoring.NewMetricServiceClient(conn)
 	return &CloudMock{
 		conn,
 		grpcServer,
 		mockTrace,
 		traceClient,
-		mockTraceClient,
 		metricClient,
 	}
 }
@@ -92,6 +84,16 @@ func NewCloudMock() *CloudMock {
 // to provide the exporters with the address of our mock server.
 func (mock *CloudMock) ClientConn() *grpc.ClientConn {
 	return mock.conn
+}
+
+// GetNumSpans returns the number of spans currently stored on the server.
+func (mock *CloudMock) GetNumSpans() int {
+	return mock.mockTraceServer.GetNumSpans()
+}
+
+// GetSpan returns the span that was stored in memory at the given index.
+func (mock *CloudMock) GetSpan(index int) *cloudtrace.Span {
+	return mock.mockTraceServer.GetSpan(index)
 }
 
 // SetDelay allows users to set the amount of time to delay before
