@@ -27,7 +27,6 @@ import (
 
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/empty"
-	mocktrace "github.com/googleinterns/cloud-operations-api-mock/api"
 	"github.com/googleinterns/cloud-operations-api-mock/internal/validation"
 
 	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"
@@ -45,7 +44,7 @@ const (
 
 var (
 	traceClient cloudtrace.TraceServiceClient
-	mockClient  mocktrace.MockTraceServiceClient
+	traceServer *MockTraceServer
 	conn        *grpc.ClientConn
 	ctx         context.Context
 	grpcServer  *grpc.Server
@@ -56,9 +55,8 @@ func setup() {
 	// Setup the in-memory server.
 	lis = bufconn.Listen(bufSize)
 	grpcServer = grpc.NewServer()
-	mockTraceServer := NewMockTraceServer()
-	cloudtrace.RegisterTraceServiceServer(grpcServer, mockTraceServer)
-	mocktrace.RegisterMockTraceServiceServer(grpcServer, mockTraceServer)
+	traceServer = NewMockTraceServer()
+	cloudtrace.RegisterTraceServiceServer(grpcServer, traceServer)
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
 			log.Fatalf("server exited with error: %v", err)
@@ -73,7 +71,6 @@ func setup() {
 		log.Fatalf("failed to dial bufnet: %v", err)
 	}
 	traceClient = cloudtrace.NewTraceServiceClient(conn)
-	mockClient = mocktrace.NewMockTraceServiceClient(conn)
 }
 
 func tearDown() {
@@ -372,14 +369,14 @@ func TestMockTraceServer_GetNumSpans(t *testing.T) {
 		t.Fatalf("failed to call BatchWriteSpans: %v", err)
 	}
 
-	numSpansResp, err := mockClient.GetNumSpans(ctx, &empty.Empty{})
+	numSpans, err := traceServer.GetNumSpans()
 	if err != nil {
 		t.Fatalf("failed to call GetNumSpans: %v", err)
 		return
 	}
 
-	if numSpansResp.NumSpans != expectedNumSpans {
-		t.Errorf("GetNumSpans() == %v, expected %v", numSpansResp.NumSpans, expectedNumSpans)
+	if numSpans != expectedNumSpans {
+		t.Errorf("GetNumSpans() == %v, expected %v", numSpans, expectedNumSpans)
 	}
 }
 
@@ -395,7 +392,7 @@ func TestMockTraceServer_GetSpan(t *testing.T) {
 	}
 
 	index := 0
-	span, err := mockClient.GetSpan(ctx, &mocktrace.GetSpanRequest{Index: int32(index)})
+	span, err := traceServer.GetSpan(index)
 	if err != nil {
 		t.Errorf("GetSpan(%v) returned error %v, expected %v", index, err, in)
 	}
@@ -405,7 +402,7 @@ func TestMockTraceServer_GetSpan(t *testing.T) {
 
 	invalidIndex := 1
 	want := codes.OutOfRange
-	span, err = mockClient.GetSpan(ctx, &mocktrace.GetSpanRequest{Index: int32(invalidIndex)})
+	span, err = traceServer.GetSpan(invalidIndex)
 	if err == nil || status.Code(err) != want {
 		t.Errorf("GetSpan(%v) == %v, expected error %v", invalidIndex, span, want)
 	}
