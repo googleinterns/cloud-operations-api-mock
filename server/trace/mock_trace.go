@@ -37,6 +37,8 @@ type MockTraceServer struct {
 	uploadedSpansLock sync.Mutex
 	delay             time.Duration
 	delayLock         sync.Mutex
+	onUpload          func(ctx context.Context, spans []*cloudtrace.Span)
+	onUploadLock      sync.Mutex
 }
 
 // NewMockTraceServer creates a new MockTraceServer and returns a pointer to it.
@@ -52,6 +54,9 @@ func (s *MockTraceServer) BatchWriteSpans(ctx context.Context, req *cloudtrace.B
 	}
 	if err := validation.ValidateSpans("BatchWriteSpans", req.Spans...); err != nil {
 		return nil, err
+	}
+	if s.onUpload != nil {
+		s.onUpload(ctx, req.Spans)
 	}
 	if err := validation.Delay(ctx, s.delay); err != nil {
 		return nil, err
@@ -90,11 +95,10 @@ func (s *MockTraceServer) GetNumSpans(ctx context.Context, req *empty.Empty) (*m
 }
 
 // SetDelay sets the amount of time to delay before writing the spans to memory.
-func (s *MockTraceServer) SetDelay(ctx context.Context, req *mocktrace.SetDelayRequest) (*empty.Empty, error) {
+func (s *MockTraceServer) SetDelay(delay time.Duration) {
 	s.delayLock.Lock()
 	defer s.delayLock.Unlock()
-	s.delay = (time.Duration(req.Duration.Seconds) * time.Second) + time.Duration(req.Duration.Nanos)
-	return &empty.Empty{}, nil
+	s.delay = delay
 }
 
 // GetSpan returns the span that was stored in memory at the given index.
@@ -103,4 +107,11 @@ func (s *MockTraceServer) GetSpan(ctx context.Context, req *mocktrace.GetSpanReq
 	defer s.uploadedSpansLock.Unlock()
 	span, err := validation.AccessSpan(int(req.Index), s.uploadedSpans)
 	return span, err
+}
+
+// SetOnUpload sets the onUpload function which is called before BatchWriteSpans runs.
+func (s *MockTraceServer) SetOnUpload(onUpload func(ctx context.Context, spans []*cloudtrace.Span)) {
+	s.onUploadLock.Lock()
+	defer s.onUploadLock.Unlock()
+	s.onUpload = onUpload
 }
