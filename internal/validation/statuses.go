@@ -23,8 +23,7 @@ import (
 
 var (
 	// Trace statuses.
-	statusInvalidSpanIndex = status.Error(codes.OutOfRange, "span index out of range")
-	statusInvalidSpanName  = status.Error(codes.InvalidArgument,
+	statusInvalidSpanName = status.Error(codes.InvalidArgument,
 		"span name must be of the form projects/{project_id}/traces/{trace_id}/spans/{span_id}")
 	statusInvalidProjectName = status.Error(codes.InvalidArgument,
 		"project name must be of the form projects/{project_id}")

@@ -50,8 +50,6 @@ func startMockServer() (string, *grpc.Server, *trace.MockTraceServer) {
 	cloudtrace.RegisterTraceServiceServer(grpcServer, mockTrace)
 	monitoring.RegisterMetricServiceServer(grpcServer, metric.NewMockMetricServer())
 
-	log.Printf("Listening on %s\n", lis.Addr().String())
-
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
 			log.Fatalf("mock server failed to serve: %v", err)
@@ -89,12 +87,12 @@ func (mock *CloudMock) ClientConn() *grpc.ClientConn {
 }
 
 // GetNumSpans returns the number of spans currently stored on the server.
-func (mock *CloudMock) GetNumSpans() (int, error) {
+func (mock *CloudMock) GetNumSpans() int {
 	return mock.mockTraceServer.GetNumSpans()
 }
 
 // GetSpan returns the span that was stored in memory at the given index.
-func (mock *CloudMock) GetSpan(index int) (*cloudtrace.Span, error) {
+func (mock *CloudMock) GetSpan(index int) *cloudtrace.Span {
 	return mock.mockTraceServer.GetSpan(index)
 }
 

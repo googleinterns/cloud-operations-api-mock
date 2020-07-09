@@ -112,12 +112,12 @@ func Delay(ctx context.Context, delay time.Duration) error {
 }
 
 // AccessSpan returns the span at the given index if it is in range.
-// If it is not in range, an error is returned.
-func AccessSpan(index int, uploadedSpans []*cloudtrace.Span) (*cloudtrace.Span, error) {
-	if index >= len(uploadedSpans) {
-		return nil, statusInvalidSpanIndex
+// If it is not in range, nil is returned.
+func AccessSpan(index int, uploadedSpans []*cloudtrace.Span) *cloudtrace.Span {
+	if index >= len(uploadedSpans) || index < 0 {
+		return nil
 	}
-	return uploadedSpans[index], nil
+	return uploadedSpans[index]
 }
 
 // ValidateProjectName verifies that the project name from the BatchWriteSpans request

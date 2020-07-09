@@ -84,10 +84,19 @@ func (s *MockTraceServer) CreateSpan(ctx context.Context, span *cloudtrace.Span)
 }
 
 // GetNumSpans returns the number of spans currently stored on the server.
-func (s *MockTraceServer) GetNumSpans() (int, error) {
+func (s *MockTraceServer) GetNumSpans() int {
 	s.uploadedSpansLock.Lock()
 	defer s.uploadedSpansLock.Unlock()
-	return len(s.uploadedSpans), nil
+	return len(s.uploadedSpans)
+}
+
+// GetSpan returns the span that was stored in memory at the given index.
+// If the index is out of bounds, nil is returned.
+func (s *MockTraceServer) GetSpan(index int) *cloudtrace.Span {
+	s.uploadedSpansLock.Lock()
+	defer s.uploadedSpansLock.Unlock()
+	span := validation.AccessSpan(index, s.uploadedSpans)
+	return span
 }
 
 // SetDelay sets the amount of time to delay before writing the spans to memory.
@@ -95,14 +104,6 @@ func (s *MockTraceServer) SetDelay(delay time.Duration) {
 	s.delayLock.Lock()
 	defer s.delayLock.Unlock()
 	s.delay = delay
-}
-
-// GetSpan returns the span that was stored in memory at the given index.
-func (s *MockTraceServer) GetSpan(index int) (*cloudtrace.Span, error) {
-	s.uploadedSpansLock.Lock()
-	defer s.uploadedSpansLock.Unlock()
-	span, err := validation.AccessSpan(index, s.uploadedSpans)
-	return span, err
 }
 
 // SetOnUpload sets the onUpload function which is called before BatchWriteSpans runs.

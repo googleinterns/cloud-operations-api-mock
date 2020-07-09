@@ -369,12 +369,7 @@ func TestMockTraceServer_GetNumSpans(t *testing.T) {
 		t.Fatalf("failed to call BatchWriteSpans: %v", err)
 	}
 
-	numSpans, err := traceServer.GetNumSpans()
-	if err != nil {
-		t.Fatalf("failed to call GetNumSpans: %v", err)
-		return
-	}
-
+	numSpans := traceServer.GetNumSpans()
 	if numSpans != expectedNumSpans {
 		t.Errorf("GetNumSpans() == %v, expected %v", numSpans, expectedNumSpans)
 	}
@@ -392,18 +387,14 @@ func TestMockTraceServer_GetSpan(t *testing.T) {
 	}
 
 	index := 0
-	span, err := traceServer.GetSpan(index)
-	if err != nil {
-		t.Errorf("GetSpan(%v) returned error %v, expected %v", index, err, in)
-	}
+	span := traceServer.GetSpan(index)
 	if !proto.Equal(in, span) {
 		t.Errorf("GetSpan(%v) == %v, expected %v", index, span, in)
 	}
 
 	invalidIndex := 1
-	want := codes.OutOfRange
-	span, err = traceServer.GetSpan(invalidIndex)
-	if err == nil || status.Code(err) != want {
-		t.Errorf("GetSpan(%v) == %v, expected error %v", invalidIndex, span, want)
+	span = traceServer.GetSpan(invalidIndex)
+	if span != nil {
+		t.Errorf("GetSpan(%v) == %v, expected nil", invalidIndex, span)
 	}
 }
