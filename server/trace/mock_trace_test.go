@@ -42,20 +42,23 @@ const (
 	spanNameFormat = "projects/%v/traces/%v/spans/%v"
 )
 
-var (
-	traceClient cloudtrace.TraceServiceClient
-	traceServer *MockTraceServer
+type TestMock struct {
 	conn        *grpc.ClientConn
 	ctx         context.Context
 	grpcServer  *grpc.Server
-	lis         *bufconn.Listener
+	traceServer *MockTraceServer
+	traceClient cloudtrace.TraceServiceClient
+}
+
+var (
+	lis *bufconn.Listener
 )
 
-func setup() {
+func setup() *TestMock {
 	// Setup the in-memory server.
 	lis = bufconn.Listen(bufSize)
-	grpcServer = grpc.NewServer()
-	traceServer = NewMockTraceServer()
+	grpcServer := grpc.NewServer()
+	traceServer := NewMockTraceServer()
 	cloudtrace.RegisterTraceServiceServer(grpcServer, traceServer)
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
@@ -64,18 +67,28 @@ func setup() {
 	}()
 
 	// Setup the connection and clients.
-	ctx = context.Background()
+	ctx := context.Background()
 	var err error
-	conn, err = grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithInsecure())
+	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("failed to dial bufnet: %v", err)
 	}
-	traceClient = cloudtrace.NewTraceServiceClient(conn)
+	traceClient := cloudtrace.NewTraceServiceClient(conn)
+
+	return &TestMock{
+		conn,
+		ctx,
+		grpcServer,
+		traceServer,
+		traceClient,
+	}
 }
 
-func tearDown() {
-	conn.Close()
-	grpcServer.GracefulStop()
+func (mock *TestMock) tearDown() {
+	if err := mock.conn.Close(); err != nil {
+		log.Fatalf("failed to close connection: %v", err)
+	}
+	mock.grpcServer.GracefulStop()
 }
 
 func bufDialer(context.Context, string) (net.Conn, error) {
@@ -151,8 +164,8 @@ func generateSpanName(projectName string) string {
 }
 
 func TestMockTraceServer_BatchWriteSpans(t *testing.T) {
-	setup()
-	defer tearDown()
+	mock := setup()
+	defer mock.tearDown()
 
 	spans := []*cloudtrace.Span{
 		generateSpan(),
@@ -165,7 +178,7 @@ func TestMockTraceServer_BatchWriteSpans(t *testing.T) {
 	}
 	want := &empty.Empty{}
 
-	response, err := traceClient.BatchWriteSpans(ctx, in)
+	response, err := mock.traceClient.BatchWriteSpans(mock.ctx, in)
 	if err != nil {
 		t.Fatalf("failed to call BatchWriteSpans: %v", err)
 		return
@@ -177,8 +190,8 @@ func TestMockTraceServer_BatchWriteSpans(t *testing.T) {
 }
 
 func TestMockTraceServer_BatchWriteSpans_MissingField(t *testing.T) {
-	setup()
-	defer tearDown()
+	mock := setup()
+	defer mock.tearDown()
 
 	missingFieldsSpan := []*cloudtrace.Span{
 		generateMissingFieldSpan("Name", "StartTime"),
@@ -194,7 +207,7 @@ func TestMockTraceServer_BatchWriteSpans_MissingField(t *testing.T) {
 		"StartTime": {},
 	}
 
-	responseSpan, err := traceClient.BatchWriteSpans(ctx, in)
+	responseSpan, err := mock.traceClient.BatchWriteSpans(mock.ctx, in)
 	if err == nil || status.Code(err) != want {
 		t.Errorf("BatchWriteSpans(%v) == %v, expected error %v",
 			in, responseSpan, want)
@@ -207,8 +220,8 @@ func TestMockTraceServer_BatchWriteSpans_MissingField(t *testing.T) {
 }
 
 func TestMockTraceServer_BatchWriteSpans_InvalidTimestamp(t *testing.T) {
-	setup()
-	defer tearDown()
+	mock := setup()
+	defer mock.tearDown()
 
 	invalidTimestampSpans := []*cloudtrace.Span{
 		generateInvalidTimestampSpan(),
@@ -221,7 +234,7 @@ func TestMockTraceServer_BatchWriteSpans_InvalidTimestamp(t *testing.T) {
 	}
 	want := codes.InvalidArgument
 
-	responseSpan, err := traceClient.BatchWriteSpans(ctx, in)
+	responseSpan, err := mock.traceClient.BatchWriteSpans(mock.ctx, in)
 	if err == nil || status.Code(err) != want {
 		t.Errorf("BatchWriteSpans(%v) == %v, expected error %v",
 			in, responseSpan, want)
@@ -229,8 +242,8 @@ func TestMockTraceServer_BatchWriteSpans_InvalidTimestamp(t *testing.T) {
 }
 
 func TestMockTraceServer_BatchWriteSpans_DuplicateName(t *testing.T) {
-	setup()
-	defer tearDown()
+	mock := setup()
+	defer mock.tearDown()
 
 	duplicateSpan := generateSpan()
 	spans := []*cloudtrace.Span{
@@ -240,7 +253,7 @@ func TestMockTraceServer_BatchWriteSpans_DuplicateName(t *testing.T) {
 	in := &cloudtrace.BatchWriteSpansRequest{Name: "projects/test-project", Spans: spans}
 	want := codes.AlreadyExists
 
-	responseSpan, err := traceClient.BatchWriteSpans(ctx, in)
+	responseSpan, err := mock.traceClient.BatchWriteSpans(mock.ctx, in)
 	if err == nil || status.Code(err) != want {
 		t.Errorf("BatchWriteSpans(%v) == %v, expected error %v",
 			in, responseSpan, want)
@@ -251,14 +264,34 @@ func TestMockTraceServer_BatchWriteSpans_DuplicateName(t *testing.T) {
 	}
 }
 
+func TestMockTraceServer_BatchWriteSpans_InvalidProjectName(t *testing.T) {
+	mock := setup()
+	defer mock.tearDown()
+
+	spans := []*cloudtrace.Span{generateSpan()}
+	requests := []*cloudtrace.BatchWriteSpansRequest{
+		{Name: "invalid-project-name", Spans: spans},
+		{Name: "projects/traces/foo/spans/bar", Spans: spans},
+	}
+	want := codes.InvalidArgument
+
+	for _, request := range requests {
+		_, err := mock.traceClient.BatchWriteSpans(mock.ctx, request)
+		if err == nil || status.Code(err) != want {
+			t.Errorf("BatchWriteSpans(%v) returned successfully, expected error %v",
+				request, want)
+		}
+	}
+}
+
 func TestMockTraceServer_CreateSpan(t *testing.T) {
-	setup()
-	defer tearDown()
+	mock := setup()
+	defer mock.tearDown()
 
 	span := generateSpan()
 	in, want := span, span
 
-	responseSpan, err := traceClient.CreateSpan(ctx, in)
+	responseSpan, err := mock.traceClient.CreateSpan(mock.ctx, in)
 	if err != nil {
 		t.Fatalf("failed to call CreateSpan: %v", err)
 		return
@@ -271,8 +304,8 @@ func TestMockTraceServer_CreateSpan(t *testing.T) {
 }
 
 func TestMockTraceServer_CreateSpan_MissingFields(t *testing.T) {
-	setup()
-	defer tearDown()
+	mock := setup()
+	defer mock.tearDown()
 
 	in := generateMissingFieldSpan("SpanId", "EndTime")
 	want := codes.InvalidArgument
@@ -281,7 +314,7 @@ func TestMockTraceServer_CreateSpan_MissingFields(t *testing.T) {
 		"EndTime": {},
 	}
 
-	responseSpan, err := traceClient.CreateSpan(ctx, in)
+	responseSpan, err := mock.traceClient.CreateSpan(mock.ctx, in)
 	if err == nil || status.Code(err) != want {
 		t.Errorf("CreateSpan(%v) == %v, expected error %v",
 			in, responseSpan, want)
@@ -294,13 +327,13 @@ func TestMockTraceServer_CreateSpan_MissingFields(t *testing.T) {
 }
 
 func TestMockTraceServer_CreateSpan_InvalidTimestamp(t *testing.T) {
-	setup()
-	defer tearDown()
+	mock := setup()
+	defer mock.tearDown()
 
 	in := generateInvalidTimestampSpan()
 	want := codes.InvalidArgument
 
-	responseSpan, err := traceClient.CreateSpan(ctx, in)
+	responseSpan, err := mock.traceClient.CreateSpan(mock.ctx, in)
 	if err == nil || status.Code(err) != want {
 		t.Errorf("CreateSpan(%v) == %v, expected error %v",
 			in, responseSpan, want)
@@ -309,18 +342,18 @@ func TestMockTraceServer_CreateSpan_InvalidTimestamp(t *testing.T) {
 }
 
 func TestMockTraceServer_CreateSpan_DuplicateName(t *testing.T) {
-	setup()
-	defer tearDown()
+	mock := setup()
+	defer mock.tearDown()
 
 	duplicateSpan := generateSpan()
 	want := codes.AlreadyExists
 
-	_, err := traceClient.CreateSpan(ctx, duplicateSpan)
+	_, err := mock.traceClient.CreateSpan(mock.ctx, duplicateSpan)
 	if err != nil {
 		t.Errorf("CreateSpan(%v) returned error %v", duplicateSpan, err)
 	}
 
-	resp, err := traceClient.CreateSpan(ctx, duplicateSpan)
+	resp, err := mock.traceClient.CreateSpan(mock.ctx, duplicateSpan)
 	if err == nil || status.Code(err) != want {
 		t.Errorf("CreateSpan(%v) returned %v, expected error %v", duplicateSpan, resp, want)
 	}
@@ -331,8 +364,8 @@ func TestMockTraceServer_CreateSpan_DuplicateName(t *testing.T) {
 }
 
 func TestMockTraceServer_GetNumSpans(t *testing.T) {
-	setup()
-	defer tearDown()
+	mock := setup()
+	defer mock.tearDown()
 
 	const expectedNumSpans = 6
 	spans1 := []*cloudtrace.Span{
@@ -349,14 +382,14 @@ func TestMockTraceServer_GetNumSpans(t *testing.T) {
 
 	errChan := make(chan error)
 	go func() {
-		_, err := traceClient.BatchWriteSpans(ctx, &cloudtrace.BatchWriteSpansRequest{
+		_, err := mock.traceClient.BatchWriteSpans(mock.ctx, &cloudtrace.BatchWriteSpansRequest{
 			Name:  "projects/test-project",
 			Spans: spans1,
 		})
 		errChan <- err
 	}()
 
-	_, err := traceClient.BatchWriteSpans(ctx, &cloudtrace.BatchWriteSpansRequest{
+	_, err := mock.traceClient.BatchWriteSpans(mock.ctx, &cloudtrace.BatchWriteSpansRequest{
 		Name:  "projects/test-project",
 		Spans: spans2,
 	})
@@ -369,32 +402,104 @@ func TestMockTraceServer_GetNumSpans(t *testing.T) {
 		t.Fatalf("failed to call BatchWriteSpans: %v", err)
 	}
 
-	numSpans := traceServer.GetNumSpans()
+	numSpans := mock.traceServer.GetNumSpans()
 	if numSpans != expectedNumSpans {
 		t.Errorf("GetNumSpans() == %v, expected %v", numSpans, expectedNumSpans)
 	}
 }
 
 func TestMockTraceServer_GetSpan(t *testing.T) {
-	setup()
-	defer tearDown()
+	mock := setup()
+	defer mock.tearDown()
 
 	in := generateSpan()
 
-	_, err := traceClient.CreateSpan(ctx, in)
+	_, err := mock.traceClient.CreateSpan(mock.ctx, in)
 	if err != nil {
-		t.Errorf("failed to call GetSpan: %v", err)
+		t.Errorf("failed to call CreateSpan: %v", err)
 	}
 
 	index := 0
-	span := traceServer.GetSpan(index)
+	span := mock.traceServer.GetSpan(index)
 	if !proto.Equal(in, span) {
 		t.Errorf("GetSpan(%v) == %v, expected %v", index, span, in)
 	}
 
 	invalidIndex := 1
-	span = traceServer.GetSpan(invalidIndex)
+	span = mock.traceServer.GetSpan(invalidIndex)
 	if span != nil {
 		t.Errorf("GetSpan(%v) == %v, expected nil", invalidIndex, span)
+	}
+}
+
+func TestMockTraceServer_SetDelay(t *testing.T) {
+	mock := setup()
+	defer mock.tearDown()
+
+	const delay = 100 * time.Millisecond
+	mock.traceServer.SetDelay(delay)
+
+	// Test that the creation of the span is delayed the correct amount.
+	start := time.Now()
+	_, err := mock.traceClient.CreateSpan(mock.ctx, generateSpan())
+	if err != nil {
+		t.Errorf("failed to call CreateSpan: %v", err)
+	}
+	duration := time.Since(start).Milliseconds()
+
+	if duration < delay.Milliseconds() {
+		t.Errorf("Expected delay of %v", delay)
+	}
+
+	// Test timing out for both CreateSpan and BatchWriteSpans.
+	const timeout = 20 * time.Millisecond
+
+	ctx, cancel := context.WithTimeout(mock.ctx, timeout)
+	_, err = mock.traceClient.CreateSpan(ctx, generateSpan())
+	if err == nil || status.Code(err) != codes.DeadlineExceeded {
+		t.Error("CreateSpan expected timeout")
+	}
+	cancel()
+
+	ctx, cancel = context.WithTimeout(mock.ctx, timeout)
+	_, err = mock.traceClient.BatchWriteSpans(ctx, &cloudtrace.BatchWriteSpansRequest{
+		Name:  "projects/test-project",
+		Spans: []*cloudtrace.Span{generateSpan()},
+	})
+	if err == nil || status.Code(err) != codes.DeadlineExceeded {
+		t.Error("BatchWriteSpans expected timeout")
+	}
+	cancel()
+}
+
+func TestMockTraceServer_SetOnUpload(t *testing.T) {
+	mock := setup()
+	defer mock.tearDown()
+
+	const numSpans = 3
+	spans := []*cloudtrace.Span{
+		generateSpan(),
+		generateSpan(),
+		generateSpan(),
+	}
+
+	// onUpload will just store the spans in a slice,
+	// just to test that it's actually called.
+	var exportedSpans []*cloudtrace.Span
+	onUpload := func(ctx context.Context, spans []*cloudtrace.Span) {
+		exportedSpans = append(exportedSpans, spans...)
+	}
+	mock.traceServer.SetOnUpload(onUpload)
+
+	// Now call BatchWriteSpans, which should execute onUpload and store spans in the slice.
+	_, err := mock.traceClient.BatchWriteSpans(mock.ctx, &cloudtrace.BatchWriteSpansRequest{
+		Name:  "projects/test-project",
+		Spans: spans,
+	})
+	if err != nil {
+		t.Fatalf("failed to call BatchWriteSpans: %v", err)
+	}
+	if len(exportedSpans) != numSpans {
+		t.Errorf("Expected %v spans, got %v instead", numSpans, len(exportedSpans))
 	}
 }
