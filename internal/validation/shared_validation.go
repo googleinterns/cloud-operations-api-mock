@@ -50,8 +50,8 @@ func CheckForRequiredFields(requiredFields []string, reqReflect reflect.Value, r
 	return nil
 }
 
-// ValidateErrDetails is used to test that the error details contain the correct missing fields.
-func ValidateErrDetails(err error, missingFields map[string]struct{}) bool {
+// ValidateMissingFieldsErrDetails is used to test that the error details contain the correct missing fields.
+func ValidateMissingFieldsErrDetails(err error, missingFields map[string]struct{}) bool {
 	st := status.Convert(err)
 	for _, detail := range st.Details() {
 		if t, ok := detail.(*errdetails.BadRequest); ok {
@@ -59,6 +59,20 @@ func ValidateErrDetails(err error, missingFields map[string]struct{}) bool {
 				if _, ok := missingFields[violation.GetField()]; !ok {
 					return false
 				}
+			}
+		}
+	}
+	return true
+}
+
+// ValidateDuplicateErrDetails is used in tests to verify that the error returned
+// contains the correct duplicated value.
+func ValidateDuplicateErrDetails(err error, duplicateName string) bool {
+	st := status.Convert(err)
+	for _, detail := range st.Details() {
+		if t, ok := detail.(*errdetails.ErrorInfo); ok {
+			if t.GetReason() != duplicateName {
+				return false
 			}
 		}
 	}

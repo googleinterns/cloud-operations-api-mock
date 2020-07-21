@@ -71,7 +71,9 @@ func (s *MockMetricServer) GetMetricDescriptor(ctx context.Context, req *monitor
 		return nil, err
 	}
 
-	metricDescriptor, err := validation.AccessMetricDescriptor(&s.uploadedMetricDescriptorsLock, s.uploadedMetricDescriptors, req.Name)
+	s.uploadedMetricDescriptorsLock.Lock()
+	defer s.uploadedMetricDescriptorsLock.Unlock()
+	metricDescriptor, err := validation.AccessMetricDescriptor(s.uploadedMetricDescriptors, req.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -86,8 +88,9 @@ func (s *MockMetricServer) CreateMetricDescriptor(ctx context.Context, req *moni
 	if err := validation.IsValidRequest(req); err != nil {
 		return nil, err
 	}
-
-	if err := validation.AddMetricDescriptor(&s.uploadedMetricDescriptorsLock, s.uploadedMetricDescriptors, req.MetricDescriptor.Name, req.MetricDescriptor); err != nil {
+	s.uploadedMetricDescriptorsLock.Lock()
+	defer s.uploadedMetricDescriptorsLock.Unlock()
+	if err := validation.AddMetricDescriptor(s.uploadedMetricDescriptors, req.MetricDescriptor.Type, req.MetricDescriptor); err != nil {
 		return nil, err
 	}
 
@@ -102,7 +105,9 @@ func (s *MockMetricServer) DeleteMetricDescriptor(ctx context.Context, req *moni
 		return nil, err
 	}
 
-	if err := validation.RemoveMetricDescriptor(&s.uploadedMetricDescriptorsLock, s.uploadedMetricDescriptors, req.Name); err != nil {
+	s.uploadedMetricDescriptorsLock.Lock()
+	defer s.uploadedMetricDescriptorsLock.Unlock()
+	if err := validation.RemoveMetricDescriptor(s.uploadedMetricDescriptors, req.Name); err != nil {
 		return nil, err
 	}
 

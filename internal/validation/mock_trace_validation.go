@@ -25,7 +25,6 @@ import (
 
 	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -245,18 +244,4 @@ func validateLinks(links *cloudtrace.Span_Links) error {
 	}
 
 	return nil
-}
-
-// ValidateDuplicateSpanNames is used in tests to verify that the error returned
-// contains the correct span name (that is, the duplicate span name).
-func ValidateDuplicateSpanNames(err error, duplicateName string) bool {
-	st := status.Convert(err)
-	for _, detail := range st.Details() {
-		if t, ok := detail.(*errdetails.ErrorInfo); ok {
-			if t.GetReason() != duplicateName {
-				return false
-			}
-		}
-	}
-	return true
 }
