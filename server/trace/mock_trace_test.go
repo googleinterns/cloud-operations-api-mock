@@ -214,7 +214,7 @@ func TestMockTraceServer_BatchWriteSpans_MissingField(t *testing.T) {
 		return
 	}
 
-	if valid := validation.ValidateErrDetails(err, missingFields); !valid {
+	if valid := validation.ValidateMissingFieldsErrDetails(err, missingFields); !valid {
 		t.Errorf("BatchWriteSpans(%v) expected missing fields %v", in, missingFields)
 	}
 }
@@ -259,7 +259,7 @@ func TestMockTraceServer_BatchWriteSpans_DuplicateName(t *testing.T) {
 			in, responseSpan, want)
 	}
 
-	if valid := validation.ValidateDuplicateSpanNames(err, duplicateSpan.Name); !valid {
+	if valid := validation.ValidateDuplicateErrDetails(err, duplicateSpan.Name); !valid {
 		t.Errorf("expected duplicate spanName: %v", duplicateSpan.Name)
 	}
 }
@@ -321,7 +321,7 @@ func TestMockTraceServer_CreateSpan_MissingFields(t *testing.T) {
 		return
 	}
 
-	if valid := validation.ValidateErrDetails(err, missingFields); !valid {
+	if valid := validation.ValidateMissingFieldsErrDetails(err, missingFields); !valid {
 		t.Errorf("CreateSpan(%v) expected missing fields %v", in, missingFields)
 	}
 }
@@ -358,7 +358,7 @@ func TestMockTraceServer_CreateSpan_DuplicateName(t *testing.T) {
 		t.Errorf("CreateSpan(%v) returned %v, expected error %v", duplicateSpan, resp, want)
 	}
 
-	if valid := validation.ValidateDuplicateSpanNames(err, duplicateSpan.Name); !valid {
+	if valid := validation.ValidateDuplicateErrDetails(err, duplicateSpan.Name); !valid {
 		t.Errorf("expected duplicate spanName: %v", duplicateSpan.Name)
 	}
 }

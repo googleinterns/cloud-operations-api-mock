@@ -54,8 +54,8 @@ var (
 	statusDuplicateSpanName = status.New(codes.AlreadyExists, "duplicate span name")
 
 	// Metric statuses.
-	statusDuplicateMetricDescriptorName = status.New(codes.AlreadyExists, "metric descriptor with same name already exists")
-	statusMetricDescriptorNotFound      = status.New(codes.NotFound, "metric descriptor with given name does not exist")
+	statusDuplicateMetricDescriptorType = status.New(codes.AlreadyExists, "metric descriptor of same type already exists")
+	statusMetricDescriptorNotFound      = status.New(codes.NotFound, "metric descriptor of given type does not exist")
 
 	// Shared statuses.
 	statusMissingField = status.New(codes.InvalidArgument, "missing required field(s)")
