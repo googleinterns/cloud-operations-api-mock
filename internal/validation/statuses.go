@@ -45,6 +45,11 @@ var (
 		fmt.Sprintf("attribute keys have a max length of %v bytes", maxAttributeKeyBytes))
 	statusInvalidAttributeValue = status.Error(codes.InvalidArgument,
 		fmt.Sprintf("attribute values have a max length of %v bytes", maxAttributeValueBytes))
+	statusInvalidAgentAttribute = status.Error(codes.InvalidArgument,
+		"agent attribute must be of the form opentelemetry-<language_code> <ot_version>; google-cloud-trace-exporter <exporter_version>")
+	statusMissingAgentAttribute    = status.Error(codes.InvalidArgument, "attributes must contain either g.co/agent or agent")
+	statusUnmappedSpecialAttribute = status.Error(codes.InvalidArgument,
+		"http.method, http.route and http.status_code should be translated to /http/method, /http/route and /http/status_code respectively")
 	statusTooManyTimeEvents = status.Error(codes.InvalidArgument,
 		fmt.Sprintf("a span can have at most %v time events", maxTimeEvents))
 	statusInvalidAnnotation = status.Error(codes.InvalidArgument,

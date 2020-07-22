@@ -503,3 +503,36 @@ func TestMockTraceServer_SetOnUpload(t *testing.T) {
 		t.Errorf("Expected %v spans, got %v instead", numSpans, len(exportedSpans))
 	}
 }
+
+func TestMockTraceServer_Attributes(t *testing.T) {
+	mock := setup()
+	defer mock.tearDown()
+
+	span := generateSpan()
+
+	// Invalid attributes, contains an unmapped special attribute and
+	// does not contain the agent.
+	attributeMap := map[string]*cloudtrace.AttributeValue{
+		"http.method": {},
+	}
+	span.Attributes = &cloudtrace.Span_Attributes{
+		AttributeMap: attributeMap,
+	}
+	_, err := mock.traceClient.CreateSpan(mock.ctx, span)
+	if err == nil || status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected invalid attributes, got success")
+	}
+
+	// Remove invalid attribute and add agent.
+	delete(attributeMap, "http.method")
+	attributeMap["g.co/agent"] = &cloudtrace.AttributeValue{
+		Value: &cloudtrace.AttributeValue_StringValue{
+			StringValue: &cloudtrace.TruncatableString{
+				Value: "opentelemetry-go 1.0.0; google-cloud-trace-exporter 1.0.1"},
+		},
+	}
+	_, err = mock.traceClient.CreateSpan(mock.ctx, span)
+	if err != nil {
+		t.Fatalf("expected success, got error %v", err)
+	}
+}
