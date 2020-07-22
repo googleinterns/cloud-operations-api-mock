@@ -17,6 +17,7 @@ package validation
 import (
 	"fmt"
 	"reflect"
+	"regexp"
 
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/status"
@@ -24,6 +25,10 @@ import (
 
 const (
 	missingFieldMsg = "%v must contain the required %v field"
+)
+
+var (
+	projectNameRegex = regexp.MustCompile("^projects/[^/]+$")
 )
 
 // CheckForRequiredFields verifies that the required fields for the given request are present.
@@ -77,4 +82,13 @@ func ValidateDuplicateErrDetails(err error, duplicateName string) bool {
 		}
 	}
 	return true
+}
+
+// ValidateProjectName verifies that the project name from the BatchWriteSpans request
+// is of the form projects/[PROJECT_ID]
+func ValidateProjectName(projectName string) error {
+	if !projectNameRegex.MatchString(projectName) {
+		return statusInvalidProjectName
+	}
+	return nil
 }

@@ -45,6 +45,11 @@ var (
 		fmt.Sprintf("attribute keys have a max length of %v bytes", maxAttributeKeyBytes))
 	statusInvalidAttributeValue = status.Error(codes.InvalidArgument,
 		fmt.Sprintf("attribute values have a max length of %v bytes", maxAttributeValueBytes))
+	statusInvalidAgentAttribute = status.Error(codes.InvalidArgument,
+		"agent attribute must be of the form opentelemetry-<language_code> <ot_version>; google-cloud-trace-exporter <exporter_version>")
+	statusMissingAgentAttribute    = status.Error(codes.InvalidArgument, "attributes must contain either g.co/agent or agent")
+	statusUnmappedSpecialAttribute = status.Error(codes.InvalidArgument,
+		"http.method, http.route and http.status_code should be translated to /http/method, /http/route and /http/status_code respectively")
 	statusTooManyTimeEvents = status.Error(codes.InvalidArgument,
 		fmt.Sprintf("a span can have at most %v time events", maxTimeEvents))
 	statusInvalidAnnotation = status.Error(codes.InvalidArgument,
@@ -56,6 +61,22 @@ var (
 	// Metric statuses.
 	statusDuplicateMetricDescriptorType = status.New(codes.AlreadyExists, "metric descriptor of same type already exists")
 	statusMetricDescriptorNotFound      = status.New(codes.NotFound, "metric descriptor of given type does not exist")
+	statusTooManyTimeSeries             = status.Error(codes.InvalidArgument,
+		fmt.Sprintf("maximum number of time series per request is %v", maxTimeSeriesPerRequest))
+	statusInvalidTimeSeries = status.Error(codes.InvalidArgument,
+		"time series require fields metric, resource, exactly one point")
+	statusInvalidTimeSeriesLabelKey = status.Error(codes.InvalidArgument,
+		fmt.Sprintf("time series metric label keys have a max length of %v bytes", maxTimeSeriesLabelKeyBytes))
+	statusInvalidTimeSeriesLabelValue = status.Error(codes.InvalidArgument,
+		fmt.Sprintf("time series metric label values have a max length of %v bytes", maxTimeSeriesLabelValueBytes))
+	statusInvalidTimeSeriesValueType = status.Error(codes.InvalidArgument,
+		"time series' value_type field must be the same as the type of the data in the points field")
+	statusMissingMetricDescriptor = status.Error(codes.InvalidArgument,
+		"corresponding metric descriptor for given time series does not exist")
+	statusInvalidTimeSeriesMetricKind = status.Error(codes.InvalidArgument,
+		"metric kind must be the same as the metric kind of the associated metric")
+	statusInvalidTimeSeriesPointGauge = status.Error(codes.InvalidArgument,
+		"for a GAUGE metric kind, the point's start time must equal the end time")
 
 	// Shared statuses.
 	statusMissingField = status.New(codes.InvalidArgument, "missing required field(s)")

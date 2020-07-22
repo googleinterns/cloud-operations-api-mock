@@ -38,12 +38,22 @@ const (
 	maxDisplayNameBytes     = 128
 	maxLinks                = 128
 	maxTimeEvents           = 32
+
+	agent          = "g.co/agent"
+	shortenedAgent = "agent"
 )
 
 var (
-	requiredFields   = []string{"Name", "SpanId", "DisplayName", "StartTime", "EndTime"}
-	spanNameRegex    = regexp.MustCompile("^projects/[^/]+/traces/[a-fA-F0-9]{32}/spans/[a-fA-F0-9]{16}$")
-	projectNameRegex = regexp.MustCompile("^projects/[^/]+$")
+	// The exporter is responsible for mapping these special attributes to the correct
+	// canonical Cloud Trace attributes (/http/method, /http/route, etc.)
+	specialAttributes = map[string]struct{}{
+		"http.method":      {},
+		"http.route":       {},
+		"http.status_code": {},
+	}
+	requiredFields = []string{"Name", "SpanId", "DisplayName", "StartTime", "EndTime"}
+	spanNameRegex  = regexp.MustCompile("^projects/[^/]+/traces/[a-fA-F0-9]{32}/spans/[a-fA-F0-9]{16}$")
+	agentRegex     = regexp.MustCompile(`^opentelemetry-[a-zA-Z]+ [0-9]+\.[0-9]+\.[0-9]+; google-cloud-trace-exporter [0-9]+\.[0-9]+\.[0-9]+$`)
 )
 
 // ValidateSpans checks that the spans conform to the API requirements.
@@ -119,15 +129,6 @@ func AccessSpan(index int, uploadedSpans []*cloudtrace.Span) *cloudtrace.Span {
 	return uploadedSpans[index]
 }
 
-// ValidateProjectName verifies that the project name from the BatchWriteSpans request
-// is of the form projects/[PROJECT_ID]
-func ValidateProjectName(projectName string) error {
-	if !projectNameRegex.MatchString(projectName) {
-		return statusInvalidProjectName
-	}
-	return nil
-}
-
 // validateDisplayName verifies that the display name has at most 128 bytes.
 func validateDisplayName(displayName *cloudtrace.TruncatableString) error {
 	if len(displayName.Value) > maxDisplayNameBytes {
@@ -174,17 +175,46 @@ func validateAttributes(attributes *cloudtrace.Span_Attributes, maxAttributes in
 		return statusTooManyAttributes
 	}
 
+	containsAgent := false
+
 	for k, v := range attributes.AttributeMap {
 		if len(k) > maxAttributeKeyBytes {
 			return statusInvalidAttributeKey
 		}
+
+		// Ensure that the special attributes have been translated properly.
+		if _, ok := specialAttributes[k]; ok {
+			return statusUnmappedSpecialAttribute
+		}
+
 		if val, ok := v.Value.(*cloudtrace.AttributeValue_StringValue); ok {
 			if len(val.StringValue.Value) > maxAttributeValueBytes {
 				return statusInvalidAttributeValue
 			}
+
+			// The span must contain the attribute "g.co/agent" or "agent".
+			if k == agent || k == shortenedAgent {
+				containsAgent = true
+				if err := validateAgent(val.StringValue.Value); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
+	if !containsAgent {
+		return statusMissingAgentAttribute
+	}
+
+	return nil
+}
+
+// validateAgent checks that the g.co/agent or agent attribute is of the form
+// opentelemetry-<language_code> <ot_version>; google-cloud-trace-exporter <exporter_version>
+func validateAgent(agent string) error {
+	if !agentRegex.MatchString(agent) {
+		return statusInvalidAgentAttribute
+	}
 	return nil
 }
 
