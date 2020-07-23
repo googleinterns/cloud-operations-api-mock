@@ -257,18 +257,6 @@ func validatePoint(ts *monitoring.TimeSeries, uploadedPoints map[string]*Previou
 		}
 	}
 
-	// For DELTA metrics, the start and end time should specify a non-zero interval,
-	// with subsequent points specifying contiguous and non-overlapping intervals.
-	if metricKind == metric.MetricDescriptor_DELTA {
-		if !startTime.Before(endTime) {
-			return statusInvalidInterval
-		}
-
-		if prevPoint != nil && !prevEndTime.Equal(startTime) {
-			return statusInvalidDeltaPoint
-		}
-	}
-
 	// For CUMULATIVE metrics, the start and end time should specify a non-zero interval,
 	// with subsequent points specifying the same start time and increasing end times,
 	// until an event resets the cumulative value to zero and sets a new start time.
@@ -280,6 +268,11 @@ func validatePoint(ts *monitoring.TimeSeries, uploadedPoints map[string]*Previou
 		if prevPoint != nil && !startTime.Equal(prevStartTime) || !endTime.After(prevEndTime) {
 			return statusInvalidCumulativePoint
 		}
+	}
+
+	// DELTA is not supposed for custom metrics.
+	if metricKind == metric.MetricDescriptor_DELTA {
+		return statusDeltaNotSupported
 	}
 
 	return nil
@@ -302,26 +295,26 @@ func convertPointInterval(point *monitoring.Point, metricKind metric.MetricDescr
 
 // serializeTimeSeries is used to uniquely serialize the time series.
 // The combination of both the metric and resource fields uniquely identify a TimeSeries.
-// The order is <metric_type>[<metric_key><metric_value>]<resource_type>[<resource_key><resource_Value>]
+// The order is <metric_type>-[<metric_key> <metric_value>]-<resource_type>-[<resource_key> <resource_Value>]
 func serializeTimeSeries(ts *monitoring.TimeSeries) string {
 	var result strings.Builder
 
 	// Add metric type.
-	result.WriteString(ts.Metric.Type)
+	result.WriteString(ts.Metric.Type + "-")
 
 	// Add metric labels.
 	for k, v := range ts.Metric.Labels {
-		result.WriteString(k)
-		result.WriteString(v)
+		result.WriteString(k + " ")
+		result.WriteString(v + " ")
 	}
 
 	// Add resource type.
-	result.WriteString(ts.Resource.Type)
+	result.WriteString("-" + ts.Resource.Type + "-")
 
 	// Add resource labels.
 	for k, v := range ts.Resource.Labels {
-		result.WriteString(k)
-		result.WriteString(v)
+		result.WriteString(k + " ")
+		result.WriteString(v + " ")
 	}
 
 	return result.String()

@@ -22,6 +22,7 @@ import (
 
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/googleinterns/cloud-operations-api-mock/internal/validation"
 
 	"google.golang.org/genproto/googleapis/api/metric"
@@ -75,7 +76,23 @@ func bufDialer(context.Context, string) (net.Conn, error) {
 	return lis.Dial()
 }
 
-func TestMockMetricServer_CreateTimeSeries(t *testing.T) {
+func generateTimeSeries(metricType string, resourceType string, metricKind metric.MetricDescriptor_MetricKind,
+	startTime *timestamp.Timestamp, endTime *timestamp.Timestamp) *monitoring.TimeSeries {
+	return &monitoring.TimeSeries{
+		Metric:     &metric.Metric{Type: metricType},
+		Resource:   &monitoredres.MonitoredResource{Type: resourceType},
+		MetricKind: metricKind,
+		Points: []*monitoring.Point{
+			{
+				Interval: &monitoring.TimeInterval{
+					StartTime: startTime, EndTime: endTime,
+				},
+			},
+		},
+	}
+}
+
+func TestMockMetricServer_CreateTimeSeries_Gauge(t *testing.T) {
 	setup()
 	defer tearDown()
 
@@ -87,36 +104,61 @@ func TestMockMetricServer_CreateTimeSeries(t *testing.T) {
 			MetricKind: metric.MetricDescriptor_GAUGE,
 		},
 	})
+	if err != nil {
+		t.Fatalf("failed to call CreateMetricDescriptor %v", err)
+	}
 
 	// Create the TimeSeries.
-	gaugeTime := ptypes.TimestampNow()
-	if err != nil {
-		log.Fatalf("failed to create span with error: %v", err)
-	}
-
+	pointTime := ptypes.TimestampNow()
 	in := &monitoring.CreateTimeSeriesRequest{
 		Name: "projects/test-project",
-		TimeSeries: []*monitoring.TimeSeries{{
-			Metric:     &metric.Metric{Type: "test-metric-type"},
-			Resource:   &monitoredres.MonitoredResource{Type: "test-monitored-resource"},
-			MetricKind: metric.MetricDescriptor_GAUGE,
-			Points: []*monitoring.Point{
-				{
-					Interval: &monitoring.TimeInterval{
-						StartTime: gaugeTime, EndTime: gaugeTime,
-					},
-				},
-			},
-		}},
+		TimeSeries: []*monitoring.TimeSeries{
+			generateTimeSeries("test-metric-type", "test-monitored-resource",
+				metric.MetricDescriptor_GAUGE, pointTime, pointTime),
+		},
 	}
-	want := &empty.Empty{}
-	response, err := client.CreateTimeSeries(ctx, in)
+
+	_, err = client.CreateTimeSeries(ctx, in)
+	if err != nil {
+		t.Fatalf("failed to call CreateTimeSeries %v", err)
+	}
+}
+
+func TestMockMetricServer_CreateTimeSeries_RateLimit(t *testing.T) {
+	setup()
+	defer tearDown()
+
+	// Create the corresponding MetricDescriptor.
+	_, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{
+		Name: "projects/test-project",
+		MetricDescriptor: &metric.MetricDescriptor{
+			Type:       "test-metric-type",
+			MetricKind: metric.MetricDescriptor_GAUGE,
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to call CreateMetricDescriptor %v", err)
+	}
+
+	// Create a point for the time series.
+	pointTime := ptypes.TimestampNow()
+	in := &monitoring.CreateTimeSeriesRequest{
+		Name: "projects/test-project",
+		TimeSeries: []*monitoring.TimeSeries{
+			generateTimeSeries("test-metric-type", "test-monitored-resource",
+				metric.MetricDescriptor_GAUGE, pointTime, pointTime),
+		},
+	}
+	_, err = client.CreateTimeSeries(ctx, in)
 	if err != nil {
 		t.Fatalf("failed to call CreateTimeSeries %v", err)
 	}
 
-	if !proto.Equal(response, want) {
-		t.Errorf("CreateTimeSeries(%q) == %q, want %q", in, response, want)
+	// Try to create another point for the same TimeSeries before 10 seconds have elapsed.
+	want := codes.Aborted
+	_, err = client.CreateTimeSeries(ctx, in)
+	if err == nil || st.Code(err) != want {
+		t.Error("Expected rate limit exceeded, instead got success")
 	}
 }
 

@@ -80,11 +80,11 @@ var (
 	statusPointMissingInterval = status.Error(codes.InvalidArgument,
 		"points must have a non-empty interval field")
 	statusInvalidGaugePoint = status.Error(codes.InvalidArgument,
-		"if start time for a gauge point is provided, the start time must equal the end time")
-	statusInvalidDeltaPoint = status.Error(codes.InvalidArgument,
-		"delta points must be contiguous and overlapping, and have a non-zero interval")
+		"if start time for a GAUGE point is provided, the start time must equal the end time")
+	statusDeltaNotSupported = status.Error(codes.InvalidArgument,
+		"DELTA is not supported for custom metrics")
 	statusInvalidCumulativePoint = status.Error(codes.InvalidArgument,
-		"cumulative points must have the same start time and increasing end times, and have a non-zero interval")
+		"CUMULATIVE points must have the same start time and increasing end times, and have a non-zero interval")
 
 	// Shared statuses.
 	statusMissingField = status.New(codes.InvalidArgument, "missing required field(s)")
