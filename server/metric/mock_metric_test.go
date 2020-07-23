@@ -20,6 +20,8 @@ import (
 	"net"
 	"testing"
 
+	"github.com/golang/protobuf/ptypes"
+
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/googleinterns/cloud-operations-api-mock/internal/validation"
 
@@ -78,9 +80,35 @@ func TestMockMetricServer_CreateTimeSeries(t *testing.T) {
 	setup()
 	defer tearDown()
 
+	// Create the corresponding MetricDescriptor.
+	_, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{
+		Name: "projects/test-project",
+		MetricDescriptor: &metric.MetricDescriptor{
+			Type:       "test-metric-type",
+			MetricKind: metric.MetricDescriptor_GAUGE,
+		},
+	})
+
+	// Create the TimeSeries.
+	gaugeTime := ptypes.TimestampNow()
+	if err != nil {
+		log.Fatalf("failed to create span with error: %v", err)
+	}
+
 	in := &monitoring.CreateTimeSeriesRequest{
-		Name:       "projects/test-project",
-		TimeSeries: []*monitoring.TimeSeries{{}},
+		Name: "projects/test-project",
+		TimeSeries: []*monitoring.TimeSeries{{
+			Metric:     &metric.Metric{Type: "test-metric-type"},
+			Resource:   &monitoredres.MonitoredResource{Type: "test-monitored-resource"},
+			MetricKind: metric.MetricDescriptor_GAUGE,
+			Points: []*monitoring.Point{
+				{
+					Interval: &monitoring.TimeInterval{
+						StartTime: gaugeTime, EndTime: gaugeTime,
+					},
+				},
+			},
+		}},
 	}
 	want := &empty.Empty{}
 	response, err := client.CreateTimeSeries(ctx, in)
