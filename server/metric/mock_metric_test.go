@@ -16,17 +16,17 @@ package metric
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"testing"
-	"math/rand"
-	"fmt"
 
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/googleinterns/cloud-operations-api-mock/internal/validation"
 
-	"google.golang.org/genproto/googleapis/api/metric"
 	"google.golang.org/genproto/googleapis/api/label"
+	"google.golang.org/genproto/googleapis/api/metric"
 	"google.golang.org/genproto/googleapis/api/monitoredres"
 	"google.golang.org/genproto/googleapis/monitoring/v3"
 	"google.golang.org/genproto/googleapis/rpc/status"
@@ -79,12 +79,17 @@ func bufDialer(context.Context, string) (net.Conn, error) {
 
 func generateMetricDescriptor() *metric.MetricDescriptor {
 	return &metric.MetricDescriptor{
-		Type: fmt.Sprintf("test-metric-descriptor-%v", rand.Intn(10000)),
+		Type:        fmt.Sprintf("custom.googleapis.com/opentelemetry/%v", rand.Intn(10000)),
 		DisplayName: "opentelemetry/test-instrument",
 		Description: "test-description",
-		Labels: []*label.LabelDescriptor{{}},
+		Labels: []*label.LabelDescriptor{
+			{
+				Key:       "testkey",
+				ValueType: label.LabelDescriptor_STRING,
+			},
+		},
 		MetricKind: metric.MetricDescriptor_GAUGE,
-		ValueType: metric.MetricDescriptor_DOUBLE,
+		ValueType:  metric.MetricDescriptor_DOUBLE,
 	}
 }
 
@@ -182,7 +187,7 @@ func TestMockMetricServer_GetMetricDescriptor(t *testing.T) {
 	want := md
 
 	if _, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{
-		Name: "projects/test-project",
+		Name:             "projects/test-project",
 		MetricDescriptor: md,
 	}); err != nil {
 		t.Fatalf("failed to create test metric descriptor with error: %v", err)
@@ -229,7 +234,7 @@ func TestMockMetricServer_DeleteMetricDescriptor(t *testing.T) {
 	want := &empty.Empty{}
 
 	if _, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{
-		Name: "projects/test-project",
+		Name:             "projects/test-project",
 		MetricDescriptor: md,
 	}); err != nil {
 		t.Fatalf("failed to create test metric descriptor with error: %v", err)
@@ -369,25 +374,30 @@ func TestMockMetricServer_MetricDescriptor_DataRace(t *testing.T) {
 func TestMockMetricServer_DuplicateMetricDescriptorError(t *testing.T) {
 	setup()
 	defer tearDown()
-	duplicateDescriptorType := "test-metric-descriptor-1"
+	duplicateDescriptorType := "custom.googleapis.com/opentelemetry/1"
 	md := &metric.MetricDescriptor{
-		Type: duplicateDescriptorType,
+		Type:        duplicateDescriptorType,
 		DisplayName: "opentelemetry/test-instrument",
 		Description: "test-description",
-		Labels: []*label.LabelDescriptor{{}},
+		Labels: []*label.LabelDescriptor{
+			{
+				Key:       "testkey",
+				ValueType: label.LabelDescriptor_STRING,
+			},
+		},
 		MetricKind: metric.MetricDescriptor_GAUGE,
-		ValueType: metric.MetricDescriptor_DOUBLE,
+		ValueType:  metric.MetricDescriptor_DOUBLE,
 	}
 
 	if _, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{
-		Name: "projects/test-project",
+		Name:             "projects/test-project",
 		MetricDescriptor: md,
 	}); err != nil {
 		t.Fatalf("failed to create test metric descriptor with error: %v", err)
 	}
 
 	in := &monitoring.CreateMetricDescriptorRequest{
-		Name: "projects/test-project",
+		Name:             "projects/test-project",
 		MetricDescriptor: md,
 	}
 	want := codes.AlreadyExists

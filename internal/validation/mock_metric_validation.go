@@ -17,10 +17,26 @@ package validation
 import (
 	"fmt"
 	"reflect"
+	"regexp"
+	"strings"
 
+	lbl "google.golang.org/genproto/googleapis/api/label"
 	"google.golang.org/genproto/googleapis/api/metric"
 	"google.golang.org/genproto/googleapis/monitoring/v3"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
+)
+
+const (
+	maxLabelKeyLength   = 100
+	maxMetricTypeLength = 200
+	maxNumberOfLabels   = 10
+)
+
+var (
+	labelKeyRegex           = regexp.MustCompile("[a-z][a-zA0-9_-]*")
+	serviceNameRegex        = regexp.MustCompile(`^([a-zA-Z0-9_]{1}[a-zA-Z0-9_-]{0,62}){1}(\.[a-zA-Z0-9_]{1}[a-zA-Z0-9_-]{0,62})*[\._]?$`)
+	relativeMetricNameRegex = regexp.MustCompile("[A-Za-z0-9_/]{1,100}")
+	diplayNameRegex         = regexp.MustCompile(`opentelemetry\/.*`)
 )
 
 // ValidRequiredFields verifies that the given request contains the required fields.
@@ -58,6 +74,90 @@ func ValidateCreateMetricDescriptor(metricDescriptor *metric.MetricDescriptor) e
 
 	if err := CheckForRequiredFields(requiredFields, reflect.ValueOf(metricDescriptor), "MetricDescriptor"); err != nil {
 		return err
+	}
+
+	if err := validateType(metricDescriptor.Type); err != nil {
+		return err
+	}
+
+	if err := validateMetricDisplayName(metricDescriptor.DisplayName); err != nil {
+		return err
+	}
+
+	if err := validateLabels(metricDescriptor.Labels); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateLabels(labels []*lbl.LabelDescriptor) error {
+	if len(labels) > maxNumberOfLabels {
+		return statusTooManyLabels
+	}
+
+	seenLabelKeys := make(map[string]struct{})
+	exists := struct{}{}
+
+	for _, label := range labels {
+		if label.Key == "" {
+			return statusMissingLabelKeyInLabel
+		}
+
+		if label.ValueType != lbl.LabelDescriptor_STRING && label.ValueType != lbl.LabelDescriptor_BOOL && label.ValueType != lbl.LabelDescriptor_INT64 {
+			return statusMissingValueTypeInLabel
+		}
+
+		if len(label.Key) > maxLabelKeyLength {
+			return statusLabelKeyTooLong
+		}
+
+		if _, ok := seenLabelKeys[label.Key]; ok {
+			return statusDuplicateLabelKeyInMetricType
+		} else {
+			seenLabelKeys[label.Key] = exists
+		}
+
+		if !labelKeyRegex.MatchString(label.Key) {
+			return statusInvalidLabelKey
+		}
+
+	}
+
+	return nil
+}
+
+func validateMetricDisplayName(displayName string) error {
+	if !diplayNameRegex.MatchString(displayName) {
+		return statusInvalidDisplayName
+	}
+
+	return nil
+}
+
+func validateType(metricType string) error {
+	if len(metricType) > maxMetricTypeLength {
+		return statusMetricTypeTooLong
+	}
+
+	if len(metricType) < 3 {
+		return statusInvalidMetricType
+	}
+
+	seperator := strings.Index(metricType, "/")
+	if seperator == -1 || seperator == len(metricType)-1 {
+		return statusInvalidMetricType
+	}
+
+	serviceName := metricType[:seperator]
+	relativeMetricName := metricType[seperator+1:]
+
+	if !serviceNameRegex.MatchString(serviceName) {
+		return statusInvalidMetricType
+	}
+
+	if !relativeMetricNameRegex.MatchString(relativeMetricName) {
+		return statusInvalidMetricType
 	}
 
 	return nil

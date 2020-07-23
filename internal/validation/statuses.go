@@ -61,6 +61,14 @@ var (
 	// Metric statuses.
 	statusDuplicateMetricDescriptorType = status.New(codes.AlreadyExists, "metric descriptor of same type already exists")
 	statusMetricDescriptorNotFound      = status.New(codes.NotFound, "metric descriptor of given type does not exist")
+	statusTooManyLabels                 = status.Error(codes.InvalidArgument, "More than maximum number of labels allowed (10 labels)")
+	statusMissingLabelKeyInLabel        = status.Error(codes.InvalidArgument, "Missing required label key in label descriptor")
+	statusMissingValueTypeInLabel       = status.Error(codes.InvalidArgument, "Missing required value type in label descriptor")
+	statusLabelKeyTooLong               = status.Error(codes.InvalidArgument, "Label key greater than 100 characters")
+	statusDuplicateLabelKeyInMetricType = status.Error(codes.AlreadyExists, "Label key found that is not unique within metric type")
+	statusInvalidLabelKey               = status.Error(codes.InvalidArgument, "Label keys must start with a lowercase letter followed by any digit, underscore, dashes or lowercase letters")
+	statusMetricTypeTooLong             = status.Error(codes.InvalidArgument, "Metric type greater than 200 characters")
+	statusInvalidMetricType             = status.Error(codes.InvalidArgument, "Metric type must be in the form as defined here: https://cloud.google.com/monitoring/api/ref_v3/rpc/google.api#google.api.MetricDescriptor.MetricKind")
 
 	// Shared statuses.
 	statusMissingField = status.New(codes.InvalidArgument, "missing required field(s)")
