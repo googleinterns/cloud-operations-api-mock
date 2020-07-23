@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/ptypes"
-
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/googleinterns/cloud-operations-api-mock/internal/validation"
 

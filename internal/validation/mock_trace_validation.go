@@ -159,7 +159,7 @@ func validateTimeStamps(span *cloudtrace.Span) error {
 	}
 
 	if !start.Before(end) {
-		return statusInvalidTimestamp
+		return statusInvalidInterval
 	}
 	return nil
 }
