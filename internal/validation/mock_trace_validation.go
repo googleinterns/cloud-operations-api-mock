@@ -53,7 +53,6 @@ var (
 	}
 	requiredFields   = []string{"Name", "SpanId", "DisplayName", "StartTime", "EndTime"}
 	spanNameRegex    = regexp.MustCompile("^projects/[^/]+/traces/[a-fA-F0-9]{32}/spans/[a-fA-F0-9]{16}$")
-	projectNameRegex = regexp.MustCompile("^projects/[^/]+$")
 	agentRegex       = regexp.MustCompile(`^opentelemetry-[a-zA-Z]+ [0-9]+\.[0-9]+\.[0-9]+; google-cloud-trace-exporter [0-9]+\.[0-9]+\.[0-9]+$`)
 )
 
@@ -128,15 +127,6 @@ func AccessSpan(index int, uploadedSpans []*cloudtrace.Span) *cloudtrace.Span {
 		return nil
 	}
 	return uploadedSpans[index]
-}
-
-// ValidateProjectName verifies that the project name from the BatchWriteSpans request
-// is of the form projects/[PROJECT_ID]
-func ValidateProjectName(projectName string) error {
-	if !projectNameRegex.MatchString(projectName) {
-		return statusInvalidProjectName
-	}
-	return nil
 }
 
 // validateDisplayName verifies that the display name has at most 128 bytes.

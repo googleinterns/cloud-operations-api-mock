@@ -23,9 +23,8 @@ import (
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 )
 
-// IsValidRequest verifies that the given request is valid.
-// This means required fields are present and all fields semantically make sense.
-func IsValidRequest(req interface{}) error {
+// ValidRequiredFields verifies that the given request contains the required fields.
+func ValidRequiredFields(req interface{}) error {
 	reqReflect := reflect.ValueOf(req)
 	requiredFields := []string{"Name"}
 	requestName := ""
@@ -52,6 +51,16 @@ func IsValidRequest(req interface{}) error {
 	}
 
 	return CheckForRequiredFields(requiredFields, reqReflect, requestName)
+}
+
+func ValidateCreateMetricDescriptor(metricDescriptor *metric.MetricDescriptor) error {
+	requiredFields := []string{"Type", "DisplayName", "Labels", "Description", "ValueType", "MetricKind"}
+
+	if err := CheckForRequiredFields(requiredFields, reflect.ValueOf(metricDescriptor), "MetricDescriptor"); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // AddMetricDescriptor adds a new MetricDescriptor to the map if a duplicate type does not already exist.

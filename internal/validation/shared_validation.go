@@ -17,6 +17,7 @@ package validation
 import (
 	"fmt"
 	"reflect"
+	"regexp"
 
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/status"
@@ -26,15 +27,27 @@ const (
 	missingFieldMsg = "%v must contain the required %v field"
 )
 
+var (
+	projectNameRegex = regexp.MustCompile("^projects/[^/]+$")
+)
+
 // CheckForRequiredFields verifies that the required fields for the given request are present.
 func CheckForRequiredFields(requiredFields []string, reqReflect reflect.Value, requestName string) error {
 	br := &errdetails.BadRequest{}
 
 	for _, field := range requiredFields {
 		if reflect.Indirect(reqReflect).FieldByName(field).IsZero() {
+			// Checking for required fields in MetricDescriptor field
+			desc := ""
+			if requestName == "MetricDescriptor" {
+				desc = fmt.Sprintf("MetricDescriptor must contain the required %v field", field)
+			} else {
+				desc = fmt.Sprintf(missingFieldMsg, requestName, field)
+			}
+
 			v := &errdetails.BadRequest_FieldViolation{
 				Field:       field,
-				Description: fmt.Sprintf(missingFieldMsg, requestName, field),
+				Description: desc,
 			}
 			br.FieldViolations = append(br.FieldViolations, v)
 		}
@@ -77,4 +90,13 @@ func ValidateDuplicateErrDetails(err error, duplicateName string) bool {
 		}
 	}
 	return true
+}
+
+// ValidateProjectName verifies that the project name from the BatchWriteSpans request
+// is of the form projects/[PROJECT_ID]
+func ValidateProjectName(projectName string) error {
+	if !projectNameRegex.MatchString(projectName) {
+		return statusInvalidProjectName
+	}
+	return nil
 }
