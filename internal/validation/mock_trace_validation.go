@@ -16,15 +16,16 @@ package validation
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 	"regexp"
+	"sync"
 	"time"
 
 	"github.com/golang/protobuf/ptypes"
-
 	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"
-	"google.golang.org/genproto/googleapis/rpc/errdetails"
+	genprotoStatus "google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -56,57 +57,94 @@ var (
 	agentRegex     = regexp.MustCompile(`^opentelemetry-[a-zA-Z]+ [0-9]+\.[0-9]+\.[0-9]+; google-cloud-trace-exporter [0-9]+\.[0-9]+\.[0-9]+$`)
 )
 
+// SpanData wraps all the span data on the server into a struct.
+type SpanData struct {
+	// If a batch has a bad span, we don't write batch to memory, but still want
+	// info on them for summary, so need SpansSummary
+	SpansSummary      []*cloudtrace.Span
+	UploadedSpanNames map[string]struct{}
+	UploadedSpans     []*cloudtrace.Span
+	Mutex             sync.Mutex
+}
+
 // ValidateSpans checks that the spans conform to the API requirements.
 // That is, required fields are present, and optional fields are of the correct form.
-func ValidateSpans(requestName string, spans ...*cloudtrace.Span) error {
+// If any violations are detected, the errors will be added to the result table.
+func ValidateSpans(requestName string, spanData *SpanData, spans ...*cloudtrace.Span) error {
+	var overallError error
+	currentRequestSpanNames := make(map[string]struct{})
+
 	for _, span := range spans {
+		var currentError error
+
 		// Validate required fields are present and semantically make sense.
 		if err := CheckForRequiredFields(requiredFields, reflect.ValueOf(span), requestName); err != nil {
-			return err
+			addSpanToSummary(&spanData.SpansSummary, span, err)
+			currentError = err
 		}
-		if err := validateName(span.Name); err != nil {
-			return err
+		if err := validateName(span.Name, spanData.UploadedSpanNames, currentRequestSpanNames); err != nil {
+			addSpanToSummary(&spanData.SpansSummary, span, err)
+			currentError = err
 		}
 		if err := validateTimeStamps(span); err != nil {
-			return err
+			addSpanToSummary(&spanData.SpansSummary, span, err)
+			currentError = err
 		}
 		if err := validateDisplayName(span.DisplayName); err != nil {
-			return err
+			addSpanToSummary(&spanData.SpansSummary, span, err)
+			currentError = err
 		}
 
 		// Validate that if optional fields are present, they conform to the API.
 		if err := validateAttributes(span.Attributes, maxAttributes); err != nil {
-			return err
+			addSpanToSummary(&spanData.SpansSummary, span, err)
+			currentError = err
 		}
 		if err := validateTimeEvents(span.TimeEvents); err != nil {
-			return err
+			addSpanToSummary(&spanData.SpansSummary, span, err)
+			currentError = err
 		}
 		if err := validateLinks(span.Links); err != nil {
-			return err
+			addSpanToSummary(&spanData.SpansSummary, span, err)
+			currentError = err
+		}
+
+		if currentError == nil {
+			addSpanToSummary(&spanData.SpansSummary, span, nil)
+		} else {
+			overallError = currentError
 		}
 	}
+
+	if overallError != nil {
+		return overallError
+	}
+
 	return nil
 }
 
-// AddSpans adds the given spans to the list of uploaded spans as long as there are no duplicate names.
-// If a duplicate span name is detected, it will not be written, and an error is returned.
-func AddSpans(uploadedSpans *[]*cloudtrace.Span, uploadedSpanNames map[string]struct{}, spans ...*cloudtrace.Span) error {
-	br := &errdetails.ErrorInfo{}
-
-	for _, span := range spans {
-		if _, ok := uploadedSpanNames[span.Name]; ok {
-			br.Reason = span.Name
-			st, err := statusDuplicateSpanName.WithDetails(br)
-			if err != nil {
-				panic(fmt.Sprintf("unexpected error attaching metadata: %v", err))
-			}
-			return st.Err()
+// addSpanToSummary sets the span's status and adds it to the summary slice.
+func addSpanToSummary(spanSummary *[]*cloudtrace.Span, span *cloudtrace.Span, err error) {
+	if err == nil {
+		span.Status = &genprotoStatus.Status{
+			Code:    int32(codes.OK),
+			Message: "OK",
 		}
-		*uploadedSpans = append(*uploadedSpans, span)
-		uploadedSpanNames[span.Name] = struct{}{}
+	} else {
+		span.Status = &genprotoStatus.Status{
+			Code:    int32(status.Convert(err).Code()),
+			Message: status.Convert(err).Message(),
+		}
 	}
+	*spanSummary = append(*spanSummary, span)
+}
 
-	return nil
+// AddSpans adds the given spans to the list of uploaded spans.
+func AddSpans(spanData *SpanData, spans ...*cloudtrace.Span) {
+	for _, span := range spans {
+		spanData.UploadedSpans = append(spanData.UploadedSpans, span)
+		spanData.UploadedSpanNames[span.Name] = struct{}{}
+	}
 }
 
 // Delay will block for the specified amount of time.
@@ -137,13 +175,23 @@ func validateDisplayName(displayName *cloudtrace.TruncatableString) error {
 	return nil
 }
 
-// validateName verifies that the span is of the form:
+// validateName verifies that the span name is not a duplicate, and is of the form:
 // projects/{project_id}/traces/{trace_id}/spans/{span_id}
 // where trace_id is a 32-char hex encoding, and span_id is a 16-char hex encoding.
-func validateName(name string) error {
+func validateName(name string, spanNames map[string]struct{}, currentRequestSpanNames map[string]struct{}) error {
+	if _, ok := spanNames[name]; ok {
+		return statusDuplicateSpanName
+	}
+
+	if _, ok := currentRequestSpanNames[name]; ok {
+		return statusDuplicateSpanName
+	}
+
 	if !spanNameRegex.MatchString(name) {
 		return statusInvalidSpanName
 	}
+
+	currentRequestSpanNames[name] = struct{}{}
 	return nil
 }
 

@@ -30,46 +30,54 @@ import (
 type MockTraceServer struct {
 	cloudtrace.UnimplementedTraceServiceServer
 	mocktrace.UnimplementedMockTraceServiceServer
-	uploadedSpanNames map[string]struct{}
-	uploadedSpans     []*cloudtrace.Span
-	uploadedSpansLock sync.Mutex
-	delay             time.Duration
-	delayLock         sync.Mutex
-	onUpload          func(ctx context.Context, spans []*cloudtrace.Span)
-	onUploadLock      sync.Mutex
+	spanData     *validation.SpanData
+	delay        time.Duration
+	delayLock    sync.Mutex
+	onUpload     func(ctx context.Context, spans []*cloudtrace.Span)
+	onUploadLock sync.Mutex
 }
 
 // NewMockTraceServer creates a new MockTraceServer and returns a pointer to it.
 func NewMockTraceServer() *MockTraceServer {
 	uploadedSpanNames := make(map[string]struct{})
-	return &MockTraceServer{uploadedSpanNames: uploadedSpanNames}
+	spanData := &validation.SpanData{
+		UploadedSpanNames: uploadedSpanNames,
+	}
+	return &MockTraceServer{spanData: spanData}
 }
 
 // BatchWriteSpans creates and stores a list of spans on the server.
+// If ANY of the spans in the request are invalid, ALL spans will be dropped.
 func (s *MockTraceServer) BatchWriteSpans(ctx context.Context, req *cloudtrace.BatchWriteSpansRequest) (*empty.Empty, error) {
 	if err := validation.ValidateProjectName(req.Name); err != nil {
 		return nil, err
 	}
-	if err := validation.ValidateSpans("BatchWriteSpans", req.Spans...); err != nil {
-		return nil, err
-	}
-	if s.onUpload != nil {
-		s.onUpload(ctx, req.Spans)
-	}
+
 	if err := validation.Delay(ctx, s.delay); err != nil {
 		return nil, err
 	}
-	s.uploadedSpansLock.Lock()
-	defer s.uploadedSpansLock.Unlock()
-	if err := validation.AddSpans(&s.uploadedSpans, s.uploadedSpanNames, req.Spans...); err != nil {
+
+	if s.onUpload != nil {
+		s.onUpload(ctx, req.Spans)
+	}
+
+	s.spanData.Mutex.Lock()
+	defer s.spanData.Mutex.Unlock()
+	if err := validation.ValidateSpans("BatchWriteSpans", s.spanData, req.Spans...); err != nil {
 		return nil, err
 	}
+
+	validation.AddSpans(s.spanData, req.Spans...)
+
 	return &empty.Empty{}, nil
 }
 
-// CreateSpan creates and stores a single span on the server.
+// CreateSpan validates a single span, and returns the Span proto.
 func (s *MockTraceServer) CreateSpan(ctx context.Context, span *cloudtrace.Span) (*cloudtrace.Span, error) {
-	if err := validation.ValidateSpans("CreateSpan", span); err != nil {
+	// Validate the span and add to result table.
+	s.spanData.Mutex.Lock()
+	defer s.spanData.Mutex.Unlock()
+	if err := validation.ValidateSpans("CreateSpan", s.spanData, span); err != nil {
 		return nil, err
 	}
 	return span, nil
@@ -78,26 +86,26 @@ func (s *MockTraceServer) CreateSpan(ctx context.Context, span *cloudtrace.Span)
 // GetNumSpans returns the number of spans currently stored on the server.
 // Used by the library implementation to avoid having to make a network call.
 func (s *MockTraceServer) GetNumSpans() int {
-	s.uploadedSpansLock.Lock()
-	defer s.uploadedSpansLock.Unlock()
-	return len(s.uploadedSpans)
+	s.spanData.Mutex.Lock()
+	defer s.spanData.Mutex.Unlock()
+	return len(s.spanData.UploadedSpans)
 }
 
 // ListSpans returns a list of all the spans currently stored on the server.
 func (s *MockTraceServer) ListSpans(ctx context.Context, req *empty.Empty) (*mocktrace.ListSpansResponse, error) {
-	s.uploadedSpansLock.Lock()
-	defer s.uploadedSpansLock.Unlock()
+	s.spanData.Mutex.Lock()
+	defer s.spanData.Mutex.Unlock()
 	return &mocktrace.ListSpansResponse{
-		Spans: s.uploadedSpans,
+		Spans: s.spanData.UploadedSpans,
 	}, nil
 }
 
 // GetSpan returns the span that was stored in memory at the given index.
 // If the index is out of bounds, nil is returned.
 func (s *MockTraceServer) GetSpan(index int) *cloudtrace.Span {
-	s.uploadedSpansLock.Lock()
-	defer s.uploadedSpansLock.Unlock()
-	span := validation.AccessSpan(index, s.uploadedSpans)
+	s.spanData.Mutex.Lock()
+	defer s.spanData.Mutex.Unlock()
+	span := validation.AccessSpan(index, s.spanData.UploadedSpans)
 	return span
 }
 
@@ -113,4 +121,8 @@ func (s *MockTraceServer) SetOnUpload(onUpload func(ctx context.Context, spans [
 	s.onUploadLock.Lock()
 	defer s.onUploadLock.Unlock()
 	s.onUpload = onUpload
+}
+
+func (s *MockTraceServer) ResultTable() *[]*cloudtrace.Span {
+	return &s.spanData.SpansSummary
 }

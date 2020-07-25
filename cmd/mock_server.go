@@ -16,6 +16,7 @@ package main
 
 import (
 	"flag"
+	"html/template"
 	"log"
 	"net"
 	"os"
@@ -26,7 +27,6 @@ import (
 
 	"github.com/googleinterns/cloud-operations-api-mock/server/metric"
 	"github.com/googleinterns/cloud-operations-api-mock/server/trace"
-
 	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"
 	"google.golang.org/genproto/googleapis/monitoring/v3"
 	"google.golang.org/grpc"
@@ -38,7 +38,9 @@ const (
 
 var (
 	address = flag.String("address", defaultAddress,
-		"The address to run the server on, of the form <host>:<port>.")
+		"The address to run the server on, of the form <host>:<port>")
+	summary = flag.Bool("summary", false,
+		"If flag is set, a summary page HTML file will be generated")
 )
 
 func main() {
@@ -46,6 +48,11 @@ func main() {
 	startStandaloneServer()
 }
 
+// startStandaloneServer spins up the mock server, and listens for requests.
+// Upon detecting a kill signal, it will shutdown and optionally print out a table of results.
+// Flags:
+// -address=<host:port> will start the server at the given address
+// -summary will tell the server to generate an HTML file containing the data received.
 func startStandaloneServer() {
 	lis, err := net.Listen("tcp", *address)
 	if err != nil {
@@ -62,12 +69,34 @@ func startStandaloneServer() {
 
 	sig := make(chan os.Signal)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+
+	// Allow the summary to be fully written before exiting.
+	finish := make(chan bool)
+
 	go func() {
 		<-sig
 		grpcServer.GracefulStop()
+		if *summary {
+			writeSummaryPage(mockTraceServer.ResultTable())
+		}
+		finish <- true
 	}()
 
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("mock server failed to serve: %v", err)
+	}
+	<-finish
+}
+
+// writeSummaryPage creates summary.html from the results and the template HTML.
+func writeSummaryPage(results *[]*cloudtrace.Span) {
+	outputFile, err := os.Create("summary.html")
+	if err != nil {
+		panic(err)
+	}
+	t := template.Must(template.ParseFiles("../static/summary_template.html"))
+	err = t.Execute(outputFile, results)
+	if err != nil {
+		panic(err)
 	}
 }

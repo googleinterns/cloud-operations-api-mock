@@ -56,7 +56,7 @@ var (
 		fmt.Sprintf("annotation descriptions have a max length of %v bytes", maxAnnotationBytes))
 	statusTooManyLinks = status.Error(codes.InvalidArgument,
 		fmt.Sprintf("a span can have at most %v links", maxLinks))
-	statusDuplicateSpanName = status.New(codes.AlreadyExists, "duplicate span name")
+	statusDuplicateSpanName = status.Error(codes.AlreadyExists, "duplicate span name")
 
 	// Metric statuses.
 	statusDuplicateMetricDescriptorType = status.New(codes.AlreadyExists, "metric descriptor of same type already exists")

@@ -294,18 +294,15 @@ func TestMockTraceServer_CreateSpan(t *testing.T) {
 	mock := setup()
 	defer mock.tearDown()
 
-	span := generateSpan()
-	in, want := span, span
+	in, want := generateSpan(), int32(codes.OK)
 
 	responseSpan, err := mock.traceClient.CreateSpan(mock.ctx, in)
 	if err != nil {
 		t.Fatalf("failed to call CreateSpan: %v", err)
-		return
 	}
 
-	if !proto.Equal(responseSpan, want) {
-		t.Errorf("CreateSpan(%v) == %v, want %v",
-			in, responseSpan, want)
+	if responseSpan.Status.Code != want {
+		t.Fatalf("expected success, got error: %v", responseSpan.Status.Code)
 	}
 }
 
@@ -410,7 +407,7 @@ func TestMockTraceServer_GetSpan(t *testing.T) {
 
 	index := 0
 	retrievedSpan := mock.traceServer.GetSpan(index)
-	if !proto.Equal(createdSpan, retrievedSpan) {
+	if retrievedSpan.Name != in.Spans[index].Name {
 		t.Errorf("GetSpan(%v) == %v, expected %v", index, retrievedSpan, in)
 	}
 
