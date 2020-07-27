@@ -95,6 +95,70 @@ func generateMetricDescriptor() *metric.MetricDescriptor {
 	}
 }
 
+func TestMockMetricServer_DuplicateMetricLabelError(t *testing.T) {
+	setup()
+	defer tearDown()
+
+	md := &metric.MetricDescriptor{
+		Type:        fmt.Sprintf("custom.googleapis.com/opentelemetry/%v", rand.Intn(10000)),
+		DisplayName: "opentelemetry/test-instrument",
+		Description: "test-description",
+		Labels: []*label.LabelDescriptor{
+			{
+				Key:       "testkey",
+				ValueType: label.LabelDescriptor_STRING,
+			},
+			{
+				Key:       "testkey",
+				ValueType: label.LabelDescriptor_STRING,
+			},
+		},
+		MetricKind: metric.MetricDescriptor_GAUGE,
+		ValueType:  metric.MetricDescriptor_DOUBLE,
+	}
+
+	in := &monitoring.CreateMetricDescriptorRequest{
+		Name:             "projects/test-project",
+		MetricDescriptor: md,
+	}
+	want := codes.InvalidArgument
+	response, err := client.CreateMetricDescriptor(ctx, in)
+	if err == nil {
+		t.Errorf("CreateMetricDescriptor(%q) == %q, expected error %q", in, response, want)
+	}
+}
+
+func TestMockMetricServer_MissingValueTypeInMetricType(t *testing.T) {
+	setup()
+	defer tearDown()
+	missingFields := map[string]struct{}{"ValueType": {}}
+	md := &metric.MetricDescriptor{
+		Type:        fmt.Sprintf("custom.googleapis.com/opentelemetry/%v", rand.Intn(10000)),
+		DisplayName: "opentelemetry/test-instrument",
+		Description: "test-description",
+		Labels: []*label.LabelDescriptor{
+			{
+				Key:       "testkeymissingvaluetype",
+				ValueType: label.LabelDescriptor_STRING,
+			},
+		},
+		MetricKind: metric.MetricDescriptor_GAUGE,
+	}
+	in := &monitoring.CreateMetricDescriptorRequest{
+		Name:             "projects/test-project",
+		MetricDescriptor: md,
+	}
+	want := codes.InvalidArgument
+	response, err := client.CreateMetricDescriptor(ctx, in)
+	if err == nil {
+		t.Errorf("CreateMetricDescriptor(%q) == %q, expected error %q", in, response, want)
+	}
+
+	if valid := validation.ValidateMissingFieldsErrDetails(err, missingFields); !valid {
+		t.Errorf("Expected missing fields %q", missingFields)
+	}
+}
+
 func TestMockMetricServer_CreateTimeSeries(t *testing.T) {
 	setup()
 	defer tearDown()

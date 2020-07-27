@@ -39,6 +39,7 @@ const (
 	maxTimeSeriesLabelValueBytes = 1024
 )
 
+// Service name regex sourced from https://github.com/asaskevich/govalidator/blob/master/patterns.go#L33
 var (
 	labelKeyRegex           = regexp.MustCompile("[a-z][a-zA0-9_-]*")
 	serviceNameRegex        = regexp.MustCompile(`^([a-zA-Z0-9_]{1}[a-zA-Z0-9_-]{0,62}){1}(\.[a-zA-Z0-9_]{1}[a-zA-Z0-9_-]{0,62})*[\._]?$`)
