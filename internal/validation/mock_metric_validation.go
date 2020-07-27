@@ -19,6 +19,9 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
+
+	"github.com/golang/protobuf/ptypes"
 
 	lbl "google.golang.org/genproto/googleapis/api/label"
 	"google.golang.org/genproto/googleapis/api/metric"
@@ -26,10 +29,14 @@ import (
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 )
 
+// Time series constraints can be found at https://cloud.google.com/monitoring/quotas#custom_metrics_quotas.
 const (
-	maxLabelKeyLength   = 100
-	maxMetricTypeLength = 200
-	maxNumberOfLabels   = 10
+	maxLabelKeyLength            = 100
+	maxMetricTypeLength          = 200
+	maxNumberOfLabels            = 10
+	maxTimeSeriesPerRequest      = 200
+	maxTimeSeriesLabelKeyBytes   = 100
+	maxTimeSeriesLabelValueBytes = 1024
 )
 
 var (
@@ -114,14 +121,13 @@ func validateLabels(labels []*lbl.LabelDescriptor) error {
 
 		if _, ok := seenLabelKeys[label.Key]; ok {
 			return statusDuplicateLabelKeyInMetricType
-		} else {
-			seenLabelKeys[label.Key] = exists
 		}
+
+		seenLabelKeys[label.Key] = exists
 
 		if !labelKeyRegex.MatchString(label.Key) {
 			return statusInvalidLabelKey
 		}
-
 	}
 
 	return nil
@@ -211,6 +217,119 @@ func RemoveMetricDescriptor(uploadedMetricDescriptors map[string]*metric.MetricD
 	}
 
 	delete(uploadedMetricDescriptors, metricType)
+
+	return nil
+}
+
+// ValidateCreateTimeSeries checks that the given TimeSeries conform to the API requirements.
+func ValidateCreateTimeSeries(timeSeries []*monitoring.TimeSeries, descriptors map[string]*metric.MetricDescriptor) error {
+	if len(timeSeries) > maxTimeSeriesPerRequest {
+		return statusTooManyTimeSeries
+	}
+
+	for _, ts := range timeSeries {
+		// Check that required fields for time series are present.
+		if ts.Metric == nil || len(ts.Points) != 1 || ts.Resource == nil {
+			return statusInvalidTimeSeries
+		}
+
+		// Check that the metric labels follow the constraints.
+		for k, v := range ts.Metric.Labels {
+			if len(k) > maxTimeSeriesLabelKeyBytes {
+				return statusInvalidTimeSeriesLabelKey
+			}
+
+			if len(v) > maxTimeSeriesLabelValueBytes {
+				return statusInvalidTimeSeriesLabelValue
+			}
+		}
+
+		if err := validateMetricKind(ts, descriptors); err != nil {
+			return err
+		}
+
+		if err := validateValueType(ts.ValueType, ts.Points[0]); err != nil {
+			return err
+		}
+
+		if err := validatePoint(ts.MetricKind, ts.Points[0]); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validateMetricKind check that if metric_kind is present,
+// it is the same as the metricKind of the associated metric.
+func validateMetricKind(timeSeries *monitoring.TimeSeries, descriptors map[string]*metric.MetricDescriptor) error {
+	descriptor := descriptors[timeSeries.Metric.Type]
+	if descriptor == nil {
+		return statusMissingMetricDescriptor
+	}
+	if descriptor.MetricKind != timeSeries.MetricKind {
+		return statusInvalidTimeSeriesMetricKind
+	}
+
+	return nil
+}
+
+// validateValueType checks that if TimeSeries' "value_type" is present,
+// it is the same as the type of the data in the "points" field.
+func validateValueType(valueType metric.MetricDescriptor_ValueType, point *monitoring.Point) error {
+	if valueType == metric.MetricDescriptor_BOOL {
+		if _, ok := point.Value.Value.(*monitoring.TypedValue_BoolValue); !ok {
+			return statusInvalidTimeSeriesValueType
+		}
+	}
+	if valueType == metric.MetricDescriptor_INT64 {
+		if _, ok := point.Value.Value.(*monitoring.TypedValue_Int64Value); !ok {
+			return statusInvalidTimeSeriesValueType
+		}
+	}
+	if valueType == metric.MetricDescriptor_DOUBLE {
+		if _, ok := point.Value.Value.(*monitoring.TypedValue_DoubleValue); !ok {
+			return statusInvalidTimeSeriesValueType
+		}
+	}
+	if valueType == metric.MetricDescriptor_STRING {
+		if _, ok := point.Value.Value.(*monitoring.TypedValue_StringValue); !ok {
+			return statusInvalidTimeSeriesValueType
+		}
+	}
+	if valueType == metric.MetricDescriptor_DISTRIBUTION {
+		if _, ok := point.Value.Value.(*monitoring.TypedValue_DistributionValue); !ok {
+			return statusInvalidTimeSeriesValueType
+		}
+	}
+
+	return nil
+}
+
+// validatePoint checks that the data for the point is valid.
+// The specifics checks depend on the metric_kind.
+func validatePoint(metricKind metric.MetricDescriptor_MetricKind, point *monitoring.Point) error {
+	startTime, err := ptypes.Timestamp(point.Interval.StartTime)
+	// If metric_kind is GAUGE, the startTime is optional.
+	if err != nil && metricKind != metric.MetricDescriptor_GAUGE {
+		return statusMalformedTimestamp
+	}
+	endTime, err := ptypes.Timestamp(point.Interval.EndTime)
+	if err != nil {
+		return statusMalformedTimestamp
+	}
+
+	// If metric_kind is GAUGE, if start time is supplied, it must equal the end time.
+	if metricKind == metric.MetricDescriptor_GAUGE {
+		// If start time is nil, ptypes.Timestamp will return time.Unix(0, 0).UTC().
+		if startTime != time.Unix(0, 0).UTC() && !startTime.Equal(endTime) {
+			return statusInvalidTimeSeriesPointGauge
+		}
+	}
+
+	// TODO (ejwang): also need checks for metric.MetricDescriptor_DELTA and metric.MetricDescriptor_CUMULATIVE,
+	//  however they involve comparing against previous time series, so we'll need to store time series in memory.
+	//  Leaving this for another PR since this PR is already quite large.
 
 	return nil
 }

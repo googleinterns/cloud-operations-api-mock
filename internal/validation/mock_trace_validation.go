@@ -51,9 +51,9 @@ var (
 		"http.route":       {},
 		"http.status_code": {},
 	}
-	requiredFields   = []string{"Name", "SpanId", "DisplayName", "StartTime", "EndTime"}
-	spanNameRegex    = regexp.MustCompile("^projects/[^/]+/traces/[a-fA-F0-9]{32}/spans/[a-fA-F0-9]{16}$")
-	agentRegex       = regexp.MustCompile(`^opentelemetry-[a-zA-Z]+ [0-9]+\.[0-9]+\.[0-9]+; google-cloud-trace-exporter [0-9]+\.[0-9]+\.[0-9]+$`)
+	requiredFields = []string{"Name", "SpanId", "DisplayName", "StartTime", "EndTime"}
+	spanNameRegex  = regexp.MustCompile("^projects/[^/]+/traces/[a-fA-F0-9]{32}/spans/[a-fA-F0-9]{16}$")
+	agentRegex     = regexp.MustCompile(`^opentelemetry-[a-zA-Z]+ [0-9]+\.[0-9]+\.[0-9]+; google-cloud-trace-exporter [0-9]+\.[0-9]+\.[0-9]+$`)
 )
 
 // ValidateSpans checks that the spans conform to the API requirements.

@@ -72,14 +72,6 @@ func (s *MockTraceServer) CreateSpan(ctx context.Context, span *cloudtrace.Span)
 	if err := validation.ValidateSpans("CreateSpan", span); err != nil {
 		return nil, err
 	}
-	if err := validation.Delay(ctx, s.delay); err != nil {
-		return nil, err
-	}
-	s.uploadedSpansLock.Lock()
-	defer s.uploadedSpansLock.Unlock()
-	if err := validation.AddSpans(&s.uploadedSpans, s.uploadedSpanNames, span); err != nil {
-		return nil, err
-	}
 	return span, nil
 }
 

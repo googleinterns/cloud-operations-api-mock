@@ -142,6 +142,12 @@ func (s *MockMetricServer) CreateTimeSeries(ctx context.Context, req *monitoring
 	if err := validation.ValidRequiredFields(req); err != nil {
 		return nil, err
 	}
+	if err := validation.ValidateProjectName(req.Name); err != nil {
+		return nil, err
+	}
+	if err := validation.ValidateCreateTimeSeries(req.TimeSeries, s.uploadedMetricDescriptors); err != nil {
+		return nil, err
+	}
 	return &empty.Empty{}, nil
 }
 
