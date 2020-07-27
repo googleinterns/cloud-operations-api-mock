@@ -106,10 +106,11 @@ Optional flags:
 `-summary` outputs a static HTML file `summary.html` when the server shuts down, which contains a summary of the data received
 
 
-Usage in Continuous Integration:
+##### Usage in Continuous Integration:
 
 There are many ways to use the stand-alone server in continuous integration.
-An example workflow would involve having CircleCI `curl` the binary and put it somewhere (Ex. `$PATH`), 
+
+An example workflow would be having CircleCI `curl` the binary and put it somewhere (Ex. `$PATH`), 
 and have the test spin up the server.
 
 Here's a simplified example from the Python Cloud Trace exporter, after the CI `curl`s the binary and adds it to `$PATH`.
