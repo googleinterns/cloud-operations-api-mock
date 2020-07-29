@@ -94,6 +94,15 @@ func (s *MockMetricServer) CreateMetricDescriptor(ctx context.Context, req *moni
 	if err := validation.ValidateRequiredFields(req); err != nil {
 		return nil, err
 	}
+
+	if err := validation.ValidateProjectName(req.Name); err != nil {
+		return nil, err
+	}
+
+	if err := validation.ValidateCreateMetricDescriptor(req.MetricDescriptor); err != nil {
+		return nil, err
+	}
+
 	s.uploadedMetricDescriptorsLock.Lock()
 	defer s.uploadedMetricDescriptorsLock.Unlock()
 	if err := validation.AddMetricDescriptor(s.uploadedMetricDescriptors, req.MetricDescriptor.Type, req.MetricDescriptor); err != nil {

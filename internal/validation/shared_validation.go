@@ -37,9 +37,17 @@ func CheckForRequiredFields(requiredFields []string, reqReflect reflect.Value, r
 
 	for _, field := range requiredFields {
 		if reflect.Indirect(reqReflect).FieldByName(field).IsZero() {
+			// Checking for required fields in MetricDescriptor field
+			desc := ""
+			if requestName == "MetricDescriptor" {
+				desc = fmt.Sprintf("MetricDescriptor must contain the required %v field", field)
+			} else {
+				desc = fmt.Sprintf(missingFieldMsg, requestName, field)
+			}
+
 			v := &errdetails.BadRequest_FieldViolation{
 				Field:       field,
-				Description: fmt.Sprintf(missingFieldMsg, requestName, field),
+				Description: desc,
 			}
 			br.FieldViolations = append(br.FieldViolations, v)
 		}

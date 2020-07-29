@@ -61,7 +61,21 @@ var (
 	// Metric statuses.
 	statusDuplicateMetricDescriptorType = status.New(codes.AlreadyExists, "metric descriptor of same type already exists")
 	statusMetricDescriptorNotFound      = status.New(codes.NotFound, "metric descriptor of given type does not exist")
-	statusTimeSeriesRateLimitExceeded   = status.Error(codes.Aborted,
+	statusMissingLabelKeyInLabel        = status.Error(codes.InvalidArgument, "Missing required label key in label descriptor")
+	statusMissingValueTypeInLabel       = status.Error(codes.InvalidArgument, "Missing required value type in label descriptor")
+
+	statusDuplicateLabelKeyInMetricType = status.Error(codes.AlreadyExists, "Label key found that is not unique within metric type")
+	statusInvalidLabelKey               = status.Error(codes.InvalidArgument,
+		"Label keys must start with a lowercase letter followed by any digit, underscore, dashes or lowercase letters")
+	statusInvalidMetricType = status.Error(codes.InvalidArgument,
+		"Metric type must be in the form as defined here: https://cloud.google.com/monitoring/api/ref_v3/rpc/google.api#google.api.MetricDescriptor.MetricKind")
+	statusLabelKeyTooLong = status.Error(codes.InvalidArgument,
+		fmt.Sprintf("Label key greater than %v characters", maxLabelKeyLength))
+	statusMetricTypeTooLong = status.Error(codes.InvalidArgument,
+		fmt.Sprintf("Metric type greater than %v characters", maxMetricTypeLength))
+	statusTooManyLabels = status.Error(codes.InvalidArgument,
+		fmt.Sprintf("More than maximum number of labels allowed (%v labels)", maxNumberOfLabels))
+	statusTimeSeriesRateLimitExceeded = status.Error(codes.Aborted,
 		"maximum rate at which data can be written to a time series is one point every 10 seconds")
 	statusTooManyTimeSeries = status.Error(codes.InvalidArgument,
 		fmt.Sprintf("maximum number of time series per request is %v", maxTimeSeriesPerRequest))
