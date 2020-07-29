@@ -27,8 +27,8 @@ var (
 		"span name must be of the form projects/{project_id}/traces/{trace_id}/spans/{span_id}")
 	statusInvalidProjectName = status.Error(codes.InvalidArgument,
 		"project name must be of the form projects/{project_id}")
-	statusInvalidTimestamp = status.Error(codes.InvalidArgument,
-		"start time must be before end time")
+	statusInvalidInterval = status.Error(codes.InvalidArgument,
+		"start and end time must specify a non-zero interval")
 	statusMalformedTimestamp = status.Error(codes.InvalidArgument,
 		"unable to parse timestamp")
 	statusTimeEventMissingTime = status.Error(codes.InvalidArgument,
@@ -61,7 +61,23 @@ var (
 	// Metric statuses.
 	statusDuplicateMetricDescriptorType = status.New(codes.AlreadyExists, "metric descriptor of same type already exists")
 	statusMetricDescriptorNotFound      = status.New(codes.NotFound, "metric descriptor of given type does not exist")
-	statusTooManyTimeSeries             = status.Error(codes.InvalidArgument,
+	statusMissingLabelKeyInLabel        = status.Error(codes.InvalidArgument, "Missing required label key in label descriptor")
+	statusMissingValueTypeInLabel       = status.Error(codes.InvalidArgument, "Missing required value type in label descriptor")
+
+	statusDuplicateLabelKeyInMetricType = status.Error(codes.AlreadyExists, "Label key found that is not unique within metric type")
+	statusInvalidLabelKey               = status.Error(codes.InvalidArgument,
+		"Label keys must start with a lowercase letter followed by any digit, underscore, dashes or lowercase letters")
+	statusInvalidMetricType = status.Error(codes.InvalidArgument,
+		"Metric type must be in the form as defined here: https://cloud.google.com/monitoring/api/ref_v3/rpc/google.api#google.api.MetricDescriptor.MetricKind")
+	statusLabelKeyTooLong = status.Error(codes.InvalidArgument,
+		fmt.Sprintf("Label key greater than %v characters", maxLabelKeyLength))
+	statusMetricTypeTooLong = status.Error(codes.InvalidArgument,
+		fmt.Sprintf("Metric type greater than %v characters", maxMetricTypeLength))
+	statusTooManyLabels = status.Error(codes.InvalidArgument,
+		fmt.Sprintf("More than maximum number of labels allowed (%v labels)", maxNumberOfLabels))
+	statusTimeSeriesRateLimitExceeded = status.Error(codes.Aborted,
+		"maximum rate at which data can be written to a time series is one point every 10 seconds")
+	statusTooManyTimeSeries = status.Error(codes.InvalidArgument,
 		fmt.Sprintf("maximum number of time series per request is %v", maxTimeSeriesPerRequest))
 	statusInvalidTimeSeries = status.Error(codes.InvalidArgument,
 		"time series require fields metric, resource, exactly one point")
@@ -75,8 +91,14 @@ var (
 		"corresponding metric descriptor for given time series does not exist")
 	statusInvalidTimeSeriesMetricKind = status.Error(codes.InvalidArgument,
 		"metric kind must be the same as the metric kind of the associated metric")
-	statusInvalidTimeSeriesPointGauge = status.Error(codes.InvalidArgument,
-		"for a GAUGE metric kind, the point's start time must equal the end time")
+	statusPointMissingInterval = status.Error(codes.InvalidArgument,
+		"points must have a non-empty interval field")
+	statusInvalidGaugePoint = status.Error(codes.InvalidArgument,
+		"if start time for a GAUGE point is provided, the start time must equal the end time")
+	statusDeltaNotSupported = status.Error(codes.InvalidArgument,
+		"DELTA is not supported for custom metrics")
+	statusInvalidCumulativePoint = status.Error(codes.InvalidArgument,
+		"CUMULATIVE points must have the same start time and increasing end times, and have a non-zero interval")
 
 	// Shared statuses.
 	statusMissingField = status.New(codes.InvalidArgument, "missing required field(s)")

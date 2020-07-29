@@ -16,15 +16,18 @@ package metric
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"testing"
 
 	"github.com/golang/protobuf/ptypes"
-
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/googleinterns/cloud-operations-api-mock/internal/validation"
 
+	"google.golang.org/genproto/googleapis/api/label"
 	"google.golang.org/genproto/googleapis/api/metric"
 	"google.golang.org/genproto/googleapis/api/monitoredres"
 	"google.golang.org/genproto/googleapis/monitoring/v3"
@@ -76,48 +79,190 @@ func bufDialer(context.Context, string) (net.Conn, error) {
 	return lis.Dial()
 }
 
-func TestMockMetricServer_CreateTimeSeries(t *testing.T) {
+func generateMetricDescriptor() *metric.MetricDescriptor {
+	return &metric.MetricDescriptor{
+		Type:        fmt.Sprintf("custom.googleapis.com/opentelemetry/%v", rand.Intn(10000)),
+		DisplayName: "opentelemetry/test-instrument",
+		Description: "test-description",
+		Labels: []*label.LabelDescriptor{
+			{
+				Key:       "testkey",
+				ValueType: label.LabelDescriptor_STRING,
+			},
+		},
+		MetricKind: metric.MetricDescriptor_GAUGE,
+		ValueType:  metric.MetricDescriptor_DOUBLE,
+	}
+}
+
+func TestMockMetricServer_DuplicateMetricLabelError(t *testing.T) {
 	setup()
 	defer tearDown()
+
+	md := &metric.MetricDescriptor{
+		Type:        "custom.googleapis.com/opentelemetry/1",
+		DisplayName: "opentelemetry/test-instrument",
+		Description: "test-description",
+		Labels: []*label.LabelDescriptor{
+			{
+				Key:       "testkey",
+				ValueType: label.LabelDescriptor_STRING,
+			},
+			{
+				Key:       "testkey",
+				ValueType: label.LabelDescriptor_STRING,
+			},
+		},
+		MetricKind: metric.MetricDescriptor_GAUGE,
+		ValueType:  metric.MetricDescriptor_DOUBLE,
+	}
+
+	in := &monitoring.CreateMetricDescriptorRequest{
+		Name:             "projects/test-project",
+		MetricDescriptor: md,
+	}
+	want := codes.InvalidArgument
+	response, err := client.CreateMetricDescriptor(ctx, in)
+	if err == nil {
+		t.Errorf("CreateMetricDescriptor(%q) == %q, expected error %q", in, response, want)
+	}
+}
+
+func TestMockMetricServer_MissingValueTypeInMetricType(t *testing.T) {
+	setup()
+	defer tearDown()
+	missingFields := map[string]struct{}{"ValueType": {}}
+	md := &metric.MetricDescriptor{
+		Type:        fmt.Sprintf("custom.googleapis.com/opentelemetry/%v", rand.Intn(10000)),
+		DisplayName: "opentelemetry/test-instrument",
+		Description: "test-description",
+		Labels: []*label.LabelDescriptor{
+			{
+				Key:       "testkeymissingvaluetype",
+				ValueType: label.LabelDescriptor_STRING,
+			},
+		},
+		MetricKind: metric.MetricDescriptor_GAUGE,
+	}
+	in := &monitoring.CreateMetricDescriptorRequest{
+		Name:             "projects/test-project",
+		MetricDescriptor: md,
+	}
+	want := codes.InvalidArgument
+	response, err := client.CreateMetricDescriptor(ctx, in)
+	if err == nil {
+		t.Errorf("CreateMetricDescriptor(%q) == %q, expected error %q", in, response, want)
+	}
+
+	if valid := validation.ValidateMissingFieldsErrDetails(err, missingFields); !valid {
+		t.Errorf("Expected missing fields %q", missingFields)
+	}
+}
+
+func generateTimeSeries(metricType string, resourceType string, metricKind metric.MetricDescriptor_MetricKind,
+	startTime *timestamp.Timestamp, endTime *timestamp.Timestamp) *monitoring.TimeSeries {
+	return &monitoring.TimeSeries{
+		Metric:     &metric.Metric{Type: metricType},
+		Resource:   &monitoredres.MonitoredResource{Type: resourceType},
+		MetricKind: metricKind,
+		Points: []*monitoring.Point{
+			{
+				Interval: &monitoring.TimeInterval{
+					StartTime: startTime, EndTime: endTime,
+				},
+			},
+		},
+	}
+}
+
+func TestMockMetricServer_CreateTimeSeries_Gauge(t *testing.T) {
+	setup()
+	defer tearDown()
+
+	metricType := "custom.googleapis.com/opentelemetry/test-1"
 
 	// Create the corresponding MetricDescriptor.
 	_, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{
 		Name: "projects/test-project",
 		MetricDescriptor: &metric.MetricDescriptor{
-			Type:       "test-metric-type",
-			MetricKind: metric.MetricDescriptor_GAUGE,
-		},
-	})
-
-	// Create the TimeSeries.
-	gaugeTime := ptypes.TimestampNow()
-	if err != nil {
-		log.Fatalf("failed to create span with error: %v", err)
-	}
-
-	in := &monitoring.CreateTimeSeriesRequest{
-		Name: "projects/test-project",
-		TimeSeries: []*monitoring.TimeSeries{{
-			Metric:     &metric.Metric{Type: "test-metric-type"},
-			Resource:   &monitoredres.MonitoredResource{Type: "test-monitored-resource"},
-			MetricKind: metric.MetricDescriptor_GAUGE,
-			Points: []*monitoring.Point{
+			Type:        metricType,
+			DisplayName: "opentelemetry/test-instrument",
+			Description: "test-description",
+			Labels: []*label.LabelDescriptor{
 				{
-					Interval: &monitoring.TimeInterval{
-						StartTime: gaugeTime, EndTime: gaugeTime,
-					},
+					Key:       "testkey",
+					ValueType: label.LabelDescriptor_STRING,
 				},
 			},
-		}},
+			MetricKind: metric.MetricDescriptor_GAUGE,
+			ValueType:  metric.MetricDescriptor_DOUBLE,
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to call CreateMetricDescriptor %v", err)
 	}
-	want := &empty.Empty{}
-	response, err := client.CreateTimeSeries(ctx, in)
+
+	// Create the TimeSeries.
+	pointTime := ptypes.TimestampNow()
+	in := &monitoring.CreateTimeSeriesRequest{
+		Name: "projects/test-project",
+		TimeSeries: []*monitoring.TimeSeries{
+			generateTimeSeries(metricType, "test-monitored-resource",
+				metric.MetricDescriptor_GAUGE, pointTime, pointTime),
+		},
+	}
+
+	_, err = client.CreateTimeSeries(ctx, in)
+	if err != nil {
+		t.Fatalf("failed to call CreateTimeSeries %v", err)
+	}
+}
+
+func TestMockMetricServer_CreateTimeSeries_RateLimit(t *testing.T) {
+	setup()
+	defer tearDown()
+	metricType := "custom.googleapis.com/opentelemetry/test-1"
+
+	// Create the corresponding MetricDescriptor.
+	_, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{
+		Name: "projects/test-project",
+		MetricDescriptor: &metric.MetricDescriptor{
+			Type:        metricType,
+			DisplayName: "opentelemetry/test-instrument",
+			Description: "test-description",
+			Labels: []*label.LabelDescriptor{
+				{
+					Key:       "testkey",
+					ValueType: label.LabelDescriptor_STRING,
+				},
+			},
+			MetricKind: metric.MetricDescriptor_GAUGE,
+			ValueType:  metric.MetricDescriptor_DOUBLE,
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to call CreateMetricDescriptor %v", err)
+	}
+
+	// Create a point for the time series.
+	pointTime := ptypes.TimestampNow()
+	in := &monitoring.CreateTimeSeriesRequest{
+		Name: "projects/test-project",
+		TimeSeries: []*monitoring.TimeSeries{
+			generateTimeSeries(metricType, "test-monitored-resource",
+				metric.MetricDescriptor_GAUGE, pointTime, pointTime),
+		},
+	}
+	_, err = client.CreateTimeSeries(ctx, in)
 	if err != nil {
 		t.Fatalf("failed to call CreateTimeSeries %v", err)
 	}
 
-	if !proto.Equal(response, want) {
-		t.Errorf("CreateTimeSeries(%q) == %q, want %q", in, response, want)
+	// Try to create another point for the same TimeSeries before 10 seconds have elapsed.
+	want := codes.Aborted
+	_, err = client.CreateTimeSeries(ctx, in)
+	if err == nil || st.Code(err) != want {
+		t.Error("Expected rate limit exceeded, instead got success")
 	}
 }
 
@@ -188,19 +333,16 @@ func TestMockMetricServer_ListMonitoredResourceDescriptors(t *testing.T) {
 func TestMockMetricServer_GetMetricDescriptor(t *testing.T) {
 	setup()
 	defer tearDown()
+	md := generateMetricDescriptor()
 
 	in := &monitoring.GetMetricDescriptorRequest{
-		Name: "test-metric-descriptor-1",
+		Name: md.Type,
 	}
-	want := &metric.MetricDescriptor{
-		Type: "test-metric-descriptor-1",
-	}
+	want := md
 
 	if _, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{
-		Name: "test-metric-descriptor-1",
-		MetricDescriptor: &metric.MetricDescriptor{
-			Type: "test-metric-descriptor-1",
-		},
+		Name:             "projects/test-project",
+		MetricDescriptor: md,
 	}); err != nil {
 		t.Fatalf("failed to create test metric descriptor with error: %v", err)
 	}
@@ -218,12 +360,13 @@ func TestMockMetricServer_GetMetricDescriptor(t *testing.T) {
 func TestMockMetricServer_CreateMetricDescriptor(t *testing.T) {
 	setup()
 	defer tearDown()
+	md := generateMetricDescriptor()
 
 	in := &monitoring.CreateMetricDescriptorRequest{
 		Name:             "projects/test-project",
-		MetricDescriptor: &metric.MetricDescriptor{},
+		MetricDescriptor: md,
 	}
-	want := &metric.MetricDescriptor{}
+	want := md
 	response, err := client.CreateMetricDescriptor(ctx, in)
 	if err != nil {
 		t.Fatalf("failed to call CreateMetricDescriptor: %v", err)
@@ -237,17 +380,16 @@ func TestMockMetricServer_CreateMetricDescriptor(t *testing.T) {
 func TestMockMetricServer_DeleteMetricDescriptor(t *testing.T) {
 	setup()
 	defer tearDown()
+	md := generateMetricDescriptor()
 
 	in := &monitoring.DeleteMetricDescriptorRequest{
-		Name: "test-metric-descriptor",
+		Name: md.Type,
 	}
 	want := &empty.Empty{}
 
 	if _, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{
-		Name: "test",
-		MetricDescriptor: &metric.MetricDescriptor{
-			Type: "test-metric-descriptor",
-		},
+		Name:             "projects/test-project",
+		MetricDescriptor: md,
 	}); err != nil {
 		t.Fatalf("failed to create test metric descriptor with error: %v", err)
 	}
@@ -357,19 +499,21 @@ func TestMockMetricServer_DeleteMetricDescriptor_NotFoundError(t *testing.T) {
 func TestMockMetricServer_MetricDescriptor_DataRace(t *testing.T) {
 	setup()
 	defer tearDown()
+	md1 := generateMetricDescriptor()
+	md2 := generateMetricDescriptor()
 
 	errChan := make(chan error)
 	go func() {
 		_, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{
-			Name:             "test-create-metric-descriptor",
-			MetricDescriptor: &metric.MetricDescriptor{Type: "test-metric-descriptor-1"},
+			Name:             "projects/test-project",
+			MetricDescriptor: md1,
 		})
 		errChan <- err
 	}()
 
 	_, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{
-		Name:             "test-create-metric-descriptor",
-		MetricDescriptor: &metric.MetricDescriptor{Type: "test-metric-descriptor-2"},
+		Name:             "projects/test-project",
+		MetricDescriptor: md2,
 	})
 	if err != nil {
 		t.Fatalf("failed to call CreateMetricDescriptor: %v", err)
@@ -384,22 +528,31 @@ func TestMockMetricServer_MetricDescriptor_DataRace(t *testing.T) {
 func TestMockMetricServer_DuplicateMetricDescriptorError(t *testing.T) {
 	setup()
 	defer tearDown()
-	duplicateDescriptorType := "test-metric-descriptor-1"
+	duplicateDescriptorType := "custom.googleapis.com/opentelemetry/1"
+	md := &metric.MetricDescriptor{
+		Type:        duplicateDescriptorType,
+		DisplayName: "opentelemetry/test-instrument",
+		Description: "test-description",
+		Labels: []*label.LabelDescriptor{
+			{
+				Key:       "testkey",
+				ValueType: label.LabelDescriptor_STRING,
+			},
+		},
+		MetricKind: metric.MetricDescriptor_GAUGE,
+		ValueType:  metric.MetricDescriptor_DOUBLE,
+	}
 
 	if _, err := client.CreateMetricDescriptor(ctx, &monitoring.CreateMetricDescriptorRequest{
-		Name: "projects/test-project",
-		MetricDescriptor: &metric.MetricDescriptor{
-			Type: duplicateDescriptorType,
-		},
+		Name:             "projects/test-project",
+		MetricDescriptor: md,
 	}); err != nil {
 		t.Fatalf("failed to create test metric descriptor with error: %v", err)
 	}
 
 	in := &monitoring.CreateMetricDescriptorRequest{
-		Name: "projects/test-project",
-		MetricDescriptor: &metric.MetricDescriptor{
-			Type: duplicateDescriptorType,
-		},
+		Name:             "projects/test-project",
+		MetricDescriptor: md,
 	}
 	want := codes.AlreadyExists
 	response, err := client.CreateMetricDescriptor(ctx, in)
