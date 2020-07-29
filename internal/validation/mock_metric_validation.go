@@ -17,6 +17,7 @@ package validation
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/golang/protobuf/ptypes"
@@ -33,8 +34,15 @@ const (
 	maxTimeSeriesLabelValueBytes = 1024
 )
 
-// ValidRequiredFields verifies that the given request contains the required fields.
-func ValidRequiredFields(req interface{}) error {
+// PreviousPoint contains information about the most recently uploaded
+// point for a time series.
+type PreviousPoint struct {
+	Point *monitoring.Point
+	Time  time.Time
+}
+
+// ValidateRequiredFields verifies that the given request contains the required fields.
+func ValidateRequiredFields(req interface{}) error {
 	reqReflect := reflect.ValueOf(req)
 	requiredFields := []string{"Name"}
 	requestName := ""
@@ -115,8 +123,24 @@ func RemoveMetricDescriptor(uploadedMetricDescriptors map[string]*metric.MetricD
 	return nil
 }
 
+// ValidateRateLimit validates that the rate at which points are written does not
+// exceed the limit. The limit is one point every 10 seconds.
+func ValidateRateLimit(timeSeries []*monitoring.TimeSeries, uploadedPoints map[string]*PreviousPoint) error {
+	for _, ts := range timeSeries {
+		tsSerial := serializeTimeSeries(ts)
+		if p, ok := uploadedPoints[tsSerial]; ok {
+			if time.Since(p.Time) < (10 * time.Second) {
+				return statusTimeSeriesRateLimitExceeded
+			}
+		}
+	}
+
+	return nil
+}
+
 // ValidateCreateTimeSeries checks that the given TimeSeries conform to the API requirements.
-func ValidateCreateTimeSeries(timeSeries []*monitoring.TimeSeries, descriptors map[string]*metric.MetricDescriptor) error {
+func ValidateCreateTimeSeries(timeSeries []*monitoring.TimeSeries, descriptors map[string]*metric.MetricDescriptor,
+	uploadedPoints map[string]*PreviousPoint) error {
 	if len(timeSeries) > maxTimeSeriesPerRequest {
 		return statusTooManyTimeSeries
 	}
@@ -146,7 +170,7 @@ func ValidateCreateTimeSeries(timeSeries []*monitoring.TimeSeries, descriptors m
 			return err
 		}
 
-		if err := validatePoint(ts.MetricKind, ts.Points[0]); err != nil {
+		if err := validatePoint(ts, uploadedPoints); err != nil {
 			return err
 		}
 	}
@@ -202,28 +226,107 @@ func validateValueType(valueType metric.MetricDescriptor_ValueType, point *monit
 
 // validatePoint checks that the data for the point is valid.
 // The specifics checks depend on the metric_kind.
-func validatePoint(metricKind metric.MetricDescriptor_MetricKind, point *monitoring.Point) error {
-	startTime, err := ptypes.Timestamp(point.Interval.StartTime)
-	// If metric_kind is GAUGE, the startTime is optional.
-	if err != nil && metricKind != metric.MetricDescriptor_GAUGE {
-		return statusMalformedTimestamp
+func validatePoint(ts *monitoring.TimeSeries, uploadedPoints map[string]*PreviousPoint) error {
+	tsSerial := serializeTimeSeries(ts)
+	currentPoint := ts.Points[0]
+	prevPoint := uploadedPoints[tsSerial]
+	metricKind := ts.MetricKind
+
+	if currentPoint.Interval == nil {
+		return statusPointMissingInterval
 	}
-	endTime, err := ptypes.Timestamp(point.Interval.EndTime)
+
+	// Convert proto timestamps to Go's time.Time
+	startTime, endTime, err := convertPointInterval(currentPoint, metricKind)
 	if err != nil {
 		return statusMalformedTimestamp
 	}
-
-	// If metric_kind is GAUGE, if start time is supplied, it must equal the end time.
-	if metricKind == metric.MetricDescriptor_GAUGE {
-		// If start time is nil, ptypes.Timestamp will return time.Unix(0, 0).UTC().
-		if startTime != time.Unix(0, 0).UTC() && !startTime.Equal(endTime) {
-			return statusInvalidTimeSeriesPointGauge
+	var prevStartTime, prevEndTime time.Time
+	if prevPoint != nil {
+		prevStartTime, prevEndTime, err = convertPointInterval(prevPoint.Point, metricKind)
+		if err != nil {
+			return statusMalformedTimestamp
 		}
 	}
 
-	// TODO (ejwang): also need checks for metric.MetricDescriptor_DELTA and metric.MetricDescriptor_CUMULATIVE,
-	//  however they involve comparing against previous time series, so we'll need to store time series in memory.
-	//  Leaving this for another PR since this PR is already quite large.
+	// For GAUGE metrics, if start time is supplied, it must equal the end time.
+	if metricKind == metric.MetricDescriptor_GAUGE {
+		// If start time is nil, ptypes.Timestamp will return time.Unix(0, 0).UTC().
+		if startTime != time.Unix(0, 0).UTC() && !startTime.Equal(endTime) {
+			return statusInvalidGaugePoint
+		}
+	}
+
+	// For CUMULATIVE metrics, the start and end time should specify a non-zero interval,
+	// with subsequent points specifying the same start time and increasing end times,
+	// until an event resets the cumulative value to zero and sets a new start time.
+	if metricKind == metric.MetricDescriptor_CUMULATIVE {
+		if !startTime.Before(endTime) {
+			return statusInvalidInterval
+		}
+
+		if prevPoint != nil && !startTime.Equal(prevStartTime) || !endTime.After(prevEndTime) {
+			return statusInvalidCumulativePoint
+		}
+	}
+
+	// DELTA is not supposed for custom metrics.
+	if metricKind == metric.MetricDescriptor_DELTA {
+		return statusDeltaNotSupported
+	}
 
 	return nil
+}
+
+// convertPointTimestamps converts a Point's interval
+// from proto's timestamp to Go's time.Time for easy comparison.
+func convertPointInterval(point *monitoring.Point, metricKind metric.MetricDescriptor_MetricKind) (time.Time, time.Time, error) {
+	startTime, err := ptypes.Timestamp(point.Interval.StartTime)
+	if err != nil && metricKind != metric.MetricDescriptor_GAUGE {
+		return startTime, time.Unix(0, 0).UTC(), statusMalformedTimestamp
+	}
+	endTime, err := ptypes.Timestamp(point.Interval.EndTime)
+	if err != nil {
+		return startTime, endTime, statusMalformedTimestamp
+	}
+
+	return startTime, endTime, nil
+}
+
+// serializeTimeSeries is used to uniquely serialize the time series.
+// The combination of both the metric and resource fields uniquely identify a TimeSeries.
+// The order is <metric_type>-[<metric_key> <metric_value>]-<resource_type>-[<resource_key> <resource_Value>]
+func serializeTimeSeries(ts *monitoring.TimeSeries) string {
+	var result strings.Builder
+
+	// Add metric type.
+	result.WriteString(ts.Metric.Type + "-")
+
+	// Add metric labels.
+	for k, v := range ts.Metric.Labels {
+		result.WriteString(k + " ")
+		result.WriteString(v + " ")
+	}
+
+	// Add resource type.
+	result.WriteString("-" + ts.Resource.Type + "-")
+
+	// Add resource labels.
+	for k, v := range ts.Resource.Labels {
+		result.WriteString(k + " ")
+		result.WriteString(v + " ")
+	}
+
+	return result.String()
+}
+
+// AddPoint sets the latest point to be the current point for a given time series.
+func AddPoint(timeSeries []*monitoring.TimeSeries, uploadedPoints map[string]*PreviousPoint) {
+	for _, ts := range timeSeries {
+		tsSerial := serializeTimeSeries(ts)
+		uploadedPoints[tsSerial] = &PreviousPoint{
+			Point: ts.Points[0],
+			Time:  time.Now(),
+		}
+	}
 }

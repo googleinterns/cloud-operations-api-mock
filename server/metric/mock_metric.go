@@ -33,18 +33,24 @@ type MockMetricServer struct {
 	monitoring.UnimplementedMetricServiceServer
 	uploadedMetricDescriptors     map[string]*metric.MetricDescriptor
 	uploadedMetricDescriptorsLock sync.Mutex
+	uploadedPoints                map[string]*validation.PreviousPoint
+	uploadedPointsLock            sync.Mutex
 }
 
 // NewMockMetricServer creates a new MockMetricServer and returns a pointer to it.
 func NewMockMetricServer() *MockMetricServer {
 	uploadedMetricDescriptors := make(map[string]*metric.MetricDescriptor)
-	return &MockMetricServer{uploadedMetricDescriptors: uploadedMetricDescriptors}
+	uploadedPoints := make(map[string]*validation.PreviousPoint)
+	return &MockMetricServer{
+		uploadedMetricDescriptors: uploadedMetricDescriptors,
+		uploadedPoints:            uploadedPoints,
+	}
 }
 
 // GetMonitoredResourceDescriptor returns the requested monitored resource descriptor if it exists.
 func (s *MockMetricServer) GetMonitoredResourceDescriptor(ctx context.Context, req *monitoring.GetMonitoredResourceDescriptorRequest,
 ) (*monitoredres.MonitoredResourceDescriptor, error) {
-	if err := validation.ValidRequiredFields(req); err != nil {
+	if err := validation.ValidateRequiredFields(req); err != nil {
 		return nil, err
 	}
 	return &monitoredres.MonitoredResourceDescriptor{}, nil
@@ -54,7 +60,7 @@ func (s *MockMetricServer) GetMonitoredResourceDescriptor(ctx context.Context, r
 // that are picked up by the given query.
 func (s *MockMetricServer) ListMonitoredResourceDescriptors(ctx context.Context, req *monitoring.ListMonitoredResourceDescriptorsRequest,
 ) (*monitoring.ListMonitoredResourceDescriptorsResponse, error) {
-	if err := validation.ValidRequiredFields(req); err != nil {
+	if err := validation.ValidateRequiredFields(req); err != nil {
 		return nil, err
 	}
 	return &monitoring.ListMonitoredResourceDescriptorsResponse{
@@ -67,7 +73,7 @@ func (s *MockMetricServer) ListMonitoredResourceDescriptors(ctx context.Context,
 // If it doesn't esxist, an error is returned.
 func (s *MockMetricServer) GetMetricDescriptor(ctx context.Context, req *monitoring.GetMetricDescriptorRequest,
 ) (*metric.MetricDescriptor, error) {
-	if err := validation.ValidRequiredFields(req); err != nil {
+	if err := validation.ValidateRequiredFields(req); err != nil {
 		return nil, err
 	}
 
@@ -85,7 +91,7 @@ func (s *MockMetricServer) GetMetricDescriptor(ctx context.Context, req *monitor
 // If it already exists, an error is returned.
 func (s *MockMetricServer) CreateMetricDescriptor(ctx context.Context, req *monitoring.CreateMetricDescriptorRequest,
 ) (*metric.MetricDescriptor, error) {
-	if err := validation.ValidRequiredFields(req); err != nil {
+	if err := validation.ValidateRequiredFields(req); err != nil {
 		return nil, err
 	}
 	s.uploadedMetricDescriptorsLock.Lock()
@@ -101,7 +107,7 @@ func (s *MockMetricServer) CreateMetricDescriptor(ctx context.Context, req *moni
 // If it doesn't exist, an error is returned.
 func (s *MockMetricServer) DeleteMetricDescriptor(ctx context.Context, req *monitoring.DeleteMetricDescriptorRequest,
 ) (*empty.Empty, error) {
-	if err := validation.ValidRequiredFields(req); err != nil {
+	if err := validation.ValidateRequiredFields(req); err != nil {
 		return nil, err
 	}
 
@@ -117,7 +123,7 @@ func (s *MockMetricServer) DeleteMetricDescriptor(ctx context.Context, req *moni
 // ListMetricDescriptors lists all the metric descriptors that are picked up by the given query.
 func (s *MockMetricServer) ListMetricDescriptors(ctx context.Context, req *monitoring.ListMetricDescriptorsRequest,
 ) (*monitoring.ListMetricDescriptorsResponse, error) {
-	if err := validation.ValidRequiredFields(req); err != nil {
+	if err := validation.ValidateRequiredFields(req); err != nil {
 		return nil, err
 	}
 	return &monitoring.ListMetricDescriptorsResponse{
@@ -130,22 +136,31 @@ func (s *MockMetricServer) ListMetricDescriptors(ctx context.Context, req *monit
 // If it already exists, an error is returned.
 func (s *MockMetricServer) CreateTimeSeries(ctx context.Context, req *monitoring.CreateTimeSeriesRequest,
 ) (*empty.Empty, error) {
-	if err := validation.ValidRequiredFields(req); err != nil {
+	s.uploadedPointsLock.Lock()
+	if err := validation.ValidateRateLimit(req.TimeSeries, s.uploadedPoints); err != nil {
+		s.uploadedPointsLock.Unlock()
+		return nil, err
+	}
+	s.uploadedPointsLock.Unlock()
+	if err := validation.ValidateRequiredFields(req); err != nil {
 		return nil, err
 	}
 	if err := validation.ValidateProjectName(req.Name); err != nil {
 		return nil, err
 	}
-	if err := validation.ValidateCreateTimeSeries(req.TimeSeries, s.uploadedMetricDescriptors); err != nil {
+	if err := validation.ValidateCreateTimeSeries(req.TimeSeries, s.uploadedMetricDescriptors, s.uploadedPoints); err != nil {
 		return nil, err
 	}
+	s.uploadedPointsLock.Lock()
+	defer s.uploadedPointsLock.Unlock()
+	validation.AddPoint(req.TimeSeries, s.uploadedPoints)
 	return &empty.Empty{}, nil
 }
 
 // ListTimeSeries lists all time series that are picked up by the given query.
 func (s *MockMetricServer) ListTimeSeries(ctx context.Context, req *monitoring.ListTimeSeriesRequest,
 ) (*monitoring.ListTimeSeriesResponse, error) {
-	if err := validation.ValidRequiredFields(req); err != nil {
+	if err := validation.ValidateRequiredFields(req); err != nil {
 		return nil, err
 	}
 	return &monitoring.ListTimeSeriesResponse{
