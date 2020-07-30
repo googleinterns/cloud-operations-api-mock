@@ -39,17 +39,19 @@ In the past, the exporter would have to point to an actual GCP instance.
 Our mock server implements the same endpoints as the Cloud Trace and Cloud Monitoring APIs. This allows you to point the exporter to our mock server instead of calling actual GCP endpoints.
 
 ```go
-	mock := cloudmock.NewCloudMock()
-	defer mock.Shutdown()
-	// Get the connection info of the mock.
-	clientOpt := []option.ClientOption{option.WithGRPCConn(mock.ClientConn())}
-    
-	// Point the exporter to the mock server.
-	_, flush, err := traceExporter.InstallNewPipeline(
-		[]traceExporter.Option{
-			traceExporter.WithTraceClientOptions(clientOpt)
-		}
-	)
+
+mock := cloudmock.NewCloudMock()
+defer mock.Shutdown()
+// Get the connection info of the mock.
+clientOpt := []option.ClientOption{option.WithGRPCConn(mock.ClientConn())}
+
+// Point the exporter to the mock server.
+_, flush, err := traceExporter.InstallNewPipeline(
+	[]traceExporter.Option{
+		traceExporter.WithTraceClientOptions(clientOpt)
+	}
+)
+
 ```
 
 ## Usage
@@ -93,12 +95,12 @@ This mode allows the mock server to be used even if you aren't using Go. Simply 
 
 Curl the binary:
 
-`curl -L https://github.com/googleinterns/cloud-operations-api-mock/raw/master/cmd/mock_server-x64-linux`
+`curl -L https://github.com/googleinterns/cloud-operations-api-mock/releases/download/v0-alpha/mock_server-x64-linux-v0-alpha`
 
 Run the binary:
 ```
-chmod +x mock_server-x64-linux
-./mock_server-x64-linux
+chmod +x mock_server-x64-linux-v0-alpha
+./mock_server-x64-linux-v0-alpha
 ```
 Optional flags: 
  
@@ -119,7 +121,7 @@ Here's a simplified example from the Python Cloud Trace exporter, after the CI `
 class SampleIntegrationTest(unittest.TestCase):
     def setUp(self):
         # Start the mock server at some address.
-        args = ["mock_server-x64-linux", "-address", self.address]
+        args = ["mock_server-x64-linux-v0-alpha", "-address", self.address]
         self.mock_server_process = subprocess.Popen(
             args, stderr=subprocess.PIPE
         )
