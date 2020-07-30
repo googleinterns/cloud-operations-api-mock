@@ -95,12 +95,12 @@ This mode allows the mock server to be used even if you aren't using Go. Simply 
 
 Curl the binary:
 
-`curl -L https://github.com/googleinterns/cloud-operations-api-mock/releases/download/v0-alpha/mock_server-x64-linux-v0-alpha`
+`curl -L https://github.com/googleinterns/cloud-operations-api-mock/releases/download/[version]/mock_server-x64-linux-[version]`
 
 Run the binary:
 ```
-chmod +x mock_server-x64-linux-v0-alpha
-./mock_server-x64-linux-v0-alpha
+chmod +x mock_server-x64-linux-[version]
+./mock_server-x64-linux-[version]
 ```
 Optional flags: 
  
@@ -121,7 +121,7 @@ Here's a simplified example from the Python Cloud Trace exporter, after the CI `
 class SampleIntegrationTest(unittest.TestCase):
     def setUp(self):
         # Start the mock server at some address.
-        args = ["mock_server-x64-linux-v0-alpha", "-address", self.address]
+        args = ["mock_server-x64-linux-[version]", "-address", self.address]
         self.mock_server_process = subprocess.Popen(
             args, stderr=subprocess.PIPE
         )
