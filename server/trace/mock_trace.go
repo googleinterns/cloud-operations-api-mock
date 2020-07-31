@@ -19,10 +19,9 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/ptypes/empty"
+	mocktrace "github.com/googleinterns/cloud-operations-api-mock/api"
 	"github.com/googleinterns/cloud-operations-api-mock/internal/validation"
-
 	"golang.org/x/net/context"
-
 	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"
 )
 
@@ -30,6 +29,7 @@ import (
 // tracing that can be called by the client.
 type MockTraceServer struct {
 	cloudtrace.UnimplementedTraceServiceServer
+	mocktrace.UnimplementedMockTraceServiceServer
 	uploadedSpanNames map[string]struct{}
 	uploadedSpans     []*cloudtrace.Span
 	uploadedSpansLock sync.Mutex
@@ -76,10 +76,20 @@ func (s *MockTraceServer) CreateSpan(ctx context.Context, span *cloudtrace.Span)
 }
 
 // GetNumSpans returns the number of spans currently stored on the server.
+// Used by the library implementation to avoid having to make a network call.
 func (s *MockTraceServer) GetNumSpans() int {
 	s.uploadedSpansLock.Lock()
 	defer s.uploadedSpansLock.Unlock()
 	return len(s.uploadedSpans)
+}
+
+// ListSpans returns a list of all the spans currently stored on the server.
+func (s *MockTraceServer) ListSpans(ctx context.Context, req *empty.Empty) (*mocktrace.ListSpansResponse, error) {
+	s.uploadedSpansLock.Lock()
+	defer s.uploadedSpansLock.Unlock()
+	return &mocktrace.ListSpansResponse{
+		Spans: s.uploadedSpans,
+	}, nil
 }
 
 // GetSpan returns the span that was stored in memory at the given index.

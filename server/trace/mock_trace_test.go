@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	mocktrace "github.com/googleinterns/cloud-operations-api-mock/api"
+
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/googleinterns/cloud-operations-api-mock/internal/validation"
@@ -43,11 +45,12 @@ const (
 )
 
 type TestMock struct {
-	conn        *grpc.ClientConn
-	ctx         context.Context
-	grpcServer  *grpc.Server
-	traceServer *MockTraceServer
-	traceClient cloudtrace.TraceServiceClient
+	conn            *grpc.ClientConn
+	ctx             context.Context
+	grpcServer      *grpc.Server
+	traceServer     *MockTraceServer
+	traceClient     cloudtrace.TraceServiceClient
+	mockTraceClient mocktrace.MockTraceServiceClient
 }
 
 var (
@@ -60,6 +63,7 @@ func setup() *TestMock {
 	grpcServer := grpc.NewServer()
 	traceServer := NewMockTraceServer()
 	cloudtrace.RegisterTraceServiceServer(grpcServer, traceServer)
+	mocktrace.RegisterMockTraceServiceServer(grpcServer, traceServer)
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
 			log.Fatalf("server exited with error: %v", err)
@@ -74,6 +78,7 @@ func setup() *TestMock {
 		log.Fatalf("failed to dial bufnet: %v", err)
 	}
 	traceClient := cloudtrace.NewTraceServiceClient(conn)
+	mockTraceClient := mocktrace.NewMockTraceServiceClient(conn)
 
 	return &TestMock{
 		conn,
@@ -81,6 +86,7 @@ func setup() *TestMock {
 		grpcServer,
 		traceServer,
 		traceClient,
+		mockTraceClient,
 	}
 }
 
@@ -515,5 +521,34 @@ func TestMockTraceServer_Attributes(t *testing.T) {
 	_, err = mock.traceClient.CreateSpan(mock.ctx, span)
 	if err != nil {
 		t.Fatalf("expected success, got error %v", err)
+	}
+}
+
+func TestMockTraceServer_ListSpans(t *testing.T) {
+	mock := setup()
+	defer mock.tearDown()
+
+	// Create the spans and write them to the server.
+	spans := []*cloudtrace.Span{
+		generateSpan(),
+		generateSpan(),
+		generateSpan(),
+	}
+
+	_, err := mock.traceClient.BatchWriteSpans(mock.ctx, &cloudtrace.BatchWriteSpansRequest{
+		Name:  "projects/test-project",
+		Spans: spans,
+	})
+	if err != nil {
+		t.Fatalf("failed to call BatchWriteSpans: %v", err)
+	}
+
+	// Fetch the spans.
+	resp, err := mock.mockTraceClient.ListSpans(mock.ctx, &empty.Empty{})
+	if err != nil {
+		t.Fatalf("failed to call ListSpans: %v", err)
+	}
+	if len(resp.Spans) != len(spans) {
+		t.Fatalf("expected %v spans, got %v", len(spans), len(resp.Spans))
 	}
 }

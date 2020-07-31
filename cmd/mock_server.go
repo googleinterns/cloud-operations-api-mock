@@ -22,6 +22,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	mocktrace "github.com/googleinterns/cloud-operations-api-mock/api"
+
 	"github.com/googleinterns/cloud-operations-api-mock/server/metric"
 	"github.com/googleinterns/cloud-operations-api-mock/server/trace"
 
@@ -51,7 +53,9 @@ func startStandaloneServer() {
 	}
 
 	grpcServer := grpc.NewServer()
-	cloudtrace.RegisterTraceServiceServer(grpcServer, trace.NewMockTraceServer())
+	mockTraceServer := trace.NewMockTraceServer()
+	cloudtrace.RegisterTraceServiceServer(grpcServer, mockTraceServer)
+	mocktrace.RegisterMockTraceServiceServer(grpcServer, mockTraceServer)
 	monitoring.RegisterMetricServiceServer(grpcServer, metric.NewMockMetricServer())
 
 	log.Printf("Listening on %s\n", lis.Addr().String())
