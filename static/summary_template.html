@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<title>Mock Server Summary</title>
+
+<html>
+<head>
+<style>
+#summary {
+  font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+  border-collapse: collapse;
+  width: 100%;
+}
+
+#summary td, #summary th {
+  border: 1px solid #ddd;
+  padding: 8px;
+}
+
+#summary th {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  text-align: left;
+  background-color: #2DFEE9;
+  color: black;
+}
+</style>
+</head>
+<body>
+
+<h1 style="text-align:center;">Trace Summary</h1>
+
+<table id="summary">
+  <tr>
+    <th>Span Name</th>
+    <th>Display Name</th>
+    <th>Status</th>
+  </tr>
+
+  {{ range $index, $span := . }}
+    {{ if eq $span.Status.Message "OK" }}
+      <tr>
+    {{ else }}
+      <tr style="background-color: indianred">
+    {{ end }}
+      <td>{{ $span.Name }}</td>
+      <td>{{ $span.DisplayName.Value }}</td>
+      <td>{{ $span.Status.Message }}</td>
+    <tr>
+  {{ end }}
+</table>
+
+</body>
+</html>
+
