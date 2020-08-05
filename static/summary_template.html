@@ -1,53 +1,44 @@
 <!DOCTYPE html>
-<title>Mock Server Summary</title>
-
-<html>
+<html lang="en">
 <head>
-<style>
-#summary {
-  font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
-  border-collapse: collapse;
-  width: 100%;
-}
-
-#summary td, #summary th {
-  border: 1px solid #ddd;
-  padding: 8px;
-}
-
-#summary th {
-  padding-top: 12px;
-  padding-bottom: 12px;
-  text-align: left;
-  background-color: #2DFEE9;
-  color: black;
-}
-</style>
+  <title>Mock Server Summary</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" type="text/css" href="css/main.css">
 </head>
 <body>
+  <div class="container-summary">
+    <div class="summary">
+      <div class="summary-head">
+        <table>
+          <thead>
+          <tr class="head">
+            <th class="cell">Span Name</th>
+            <th class="cell">Display Name</th>
+            <th class="cell">Status</th>
+          </tr>
+          </thead>
+        </table>
+      </div>
 
-<h1 style="text-align:center;">Trace Summary</h1>
-
-<table id="summary">
-  <tr>
-    <th>Span Name</th>
-    <th>Display Name</th>
-    <th>Status</th>
-  </tr>
-
-  {{ range $index, $span := . }}
-    {{ if eq $span.Status.Message "OK" }}
-      <tr>
-    {{ else }}
-      <tr style="background-color: indianred">
-    {{ end }}
-      <td>{{ $span.Name }}</td>
-      <td>{{ $span.DisplayName.Value }}</td>
-      <td>{{ $span.Status.Message }}</td>
-    <tr>
-  {{ end }}
-</table>
-
+      <div class="summary-body">
+        <table>
+          <tbody>
+          {{ range $index, $span := . }}
+              {{ if eq $span.Status.Message "OK" }}
+                <tr class="body">
+              {{ else }}
+                <tr class="body" style="border: solid 2px red;">
+              {{ end }}
+              <td class="cell">{{ $span.Name }}</td>
+              <td class="cell">{{ $span.DisplayName.Value }}</td>
+              <td class="cell">{{ $span.Status.Message }}</td>
+              </tr>
+          {{ end }}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
-

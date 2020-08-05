@@ -90,7 +90,7 @@ func startStandaloneServer() {
 
 // writeSummaryPage creates summary.html from the results and the template HTML.
 func writeSummaryPage(results []*cloudtrace.Span) {
-	outputFile, err := os.Create("summary.html")
+	outputFile, err := os.Create("../static/summary.html")
 	if err != nil {
 		panic(err)
 	}
