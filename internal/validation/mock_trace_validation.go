@@ -64,7 +64,7 @@ type SpanData struct {
 	SpansSummary      []*cloudtrace.Span
 	UploadedSpanNames map[string]struct{}
 	UploadedSpans     []*cloudtrace.Span
-	Mutex             sync.Mutex
+	Mutex             sync.RWMutex
 }
 
 // ValidateSpans checks that the spans conform to the API requirements.
@@ -125,6 +125,11 @@ func ValidateSpans(requestName string, spanData *SpanData, spans ...*cloudtrace.
 
 // addSpanToSummary sets the span's status and adds it to the summary slice.
 func addSpanToSummary(spanSummary *[]*cloudtrace.Span, span *cloudtrace.Span, err error) {
+	setSpanStatus(span, err)
+	*spanSummary = append(*spanSummary, span)
+}
+
+func setSpanStatus(span *cloudtrace.Span, err error) {
 	if err == nil {
 		span.Status = &genprotoStatus.Status{
 			Code:    int32(codes.OK),
@@ -136,7 +141,6 @@ func addSpanToSummary(spanSummary *[]*cloudtrace.Span, span *cloudtrace.Span, er
 			Message: status.Convert(err).Message(),
 		}
 	}
-	*spanSummary = append(*spanSummary, span)
 }
 
 // AddSpans adds the given spans to the list of uploaded spans.

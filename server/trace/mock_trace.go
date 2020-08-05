@@ -86,15 +86,15 @@ func (s *MockTraceServer) CreateSpan(ctx context.Context, span *cloudtrace.Span)
 // GetNumSpans returns the number of spans currently stored on the server.
 // Used by the library implementation to avoid having to make a network call.
 func (s *MockTraceServer) GetNumSpans() int {
-	s.spanData.Mutex.Lock()
-	defer s.spanData.Mutex.Unlock()
+	s.spanData.Mutex.RLock()
+	defer s.spanData.Mutex.RUnlock()
 	return len(s.spanData.UploadedSpans)
 }
 
 // ListSpans returns a list of all the spans currently stored on the server.
 func (s *MockTraceServer) ListSpans(ctx context.Context, req *empty.Empty) (*mocktrace.ListSpansResponse, error) {
-	s.spanData.Mutex.Lock()
-	defer s.spanData.Mutex.Unlock()
+	s.spanData.Mutex.RLock()
+	defer s.spanData.Mutex.RUnlock()
 	return &mocktrace.ListSpansResponse{
 		Spans: s.spanData.UploadedSpans,
 	}, nil
@@ -103,8 +103,8 @@ func (s *MockTraceServer) ListSpans(ctx context.Context, req *empty.Empty) (*moc
 // GetSpan returns the span that was stored in memory at the given index.
 // If the index is out of bounds, nil is returned.
 func (s *MockTraceServer) GetSpan(index int) *cloudtrace.Span {
-	s.spanData.Mutex.Lock()
-	defer s.spanData.Mutex.Unlock()
+	s.spanData.Mutex.RLock()
+	defer s.spanData.Mutex.RUnlock()
 	span := validation.AccessSpan(index, s.spanData.UploadedSpans)
 	return span
 }
@@ -123,6 +123,6 @@ func (s *MockTraceServer) SetOnUpload(onUpload func(ctx context.Context, spans [
 	s.onUpload = onUpload
 }
 
-func (s *MockTraceServer) ResultTable() *[]*cloudtrace.Span {
-	return &s.spanData.SpansSummary
+func (s *MockTraceServer) ResultTable() []*cloudtrace.Span {
+	return s.spanData.SpansSummary
 }
