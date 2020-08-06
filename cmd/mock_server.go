@@ -48,6 +48,7 @@ var (
 type summaryTable struct {
 	Spans             []*cloudtrace.Span
 	MetricDescriptors []*validation.DescriptorStatus
+	TimeSeries        []*validation.TimeSeriesStatus
 }
 
 func main() {
@@ -87,7 +88,8 @@ func startStandaloneServer() {
 		<-sig
 		grpcServer.GracefulStop()
 		if *summary {
-			summaryTable := createSummaryTable(mockTraceServer.SpansSummary(), mockMetricServer.MetricDescriptorSummary())
+			summaryTable := createSummaryTable(mockTraceServer.SpansSummary(),
+				mockMetricServer.MetricDescriptorSummary(), mockMetricServer.TimeSeriesSummary())
 			writeSummaryPage(summaryTable)
 		}
 		finish <- true
@@ -99,10 +101,12 @@ func startStandaloneServer() {
 	<-finish
 }
 
-func createSummaryTable(spans []*cloudtrace.Span, descriptors []*validation.DescriptorStatus) summaryTable {
+func createSummaryTable(spans []*cloudtrace.Span, descriptors []*validation.DescriptorStatus,
+	timeSeries []*validation.TimeSeriesStatus) summaryTable {
 	return summaryTable{
 		Spans:             spans,
 		MetricDescriptors: descriptors,
+		TimeSeries:        timeSeries,
 	}
 }
 

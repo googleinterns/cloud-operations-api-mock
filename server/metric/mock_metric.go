@@ -15,8 +15,6 @@
 package metric
 
 import (
-	"sync"
-
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/googleinterns/cloud-operations-api-mock/internal/validation"
 	"golang.org/x/net/context"
@@ -32,8 +30,7 @@ import (
 type MockMetricServer struct {
 	monitoring.UnimplementedMetricServiceServer
 	metricDescriptorData *validation.MetricDescriptorData
-	uploadedPoints       map[string]*validation.PreviousPoint
-	uploadedPointsLock   sync.Mutex
+	timeSeriesData       *validation.TimeSeriesData
 }
 
 // NewMockMetricServer creates a new MockMetricServer and returns a pointer to it.
@@ -43,9 +40,12 @@ func NewMockMetricServer() *MockMetricServer {
 		UploadedMetricDescriptors: uploadedMetricDescriptors,
 	}
 	uploadedPoints := make(map[string]*validation.PreviousPoint)
+	timeSeriesData := &validation.TimeSeriesData{
+		UploadedPoints: uploadedPoints,
+	}
 	return &MockMetricServer{
 		metricDescriptorData: metricDescriptorData,
-		uploadedPoints:       uploadedPoints,
+		timeSeriesData:       timeSeriesData,
 	}
 }
 
@@ -152,24 +152,21 @@ func (s *MockMetricServer) ListMetricDescriptors(ctx context.Context, req *monit
 // If it already exists, an error is returned.
 func (s *MockMetricServer) CreateTimeSeries(ctx context.Context, req *monitoring.CreateTimeSeriesRequest,
 ) (*empty.Empty, error) {
-	s.uploadedPointsLock.Lock()
-	if err := validation.ValidateRateLimit(req.TimeSeries, s.uploadedPoints); err != nil {
-		s.uploadedPointsLock.Unlock()
+	s.timeSeriesData.TimeSeriesLock.Lock()
+	defer s.timeSeriesData.TimeSeriesLock.Unlock()
+	if err := validation.ValidateRateLimit(req.TimeSeries, s.timeSeriesData.UploadedPoints); err != nil {
 		return nil, err
 	}
-	s.uploadedPointsLock.Unlock()
 	if err := validation.ValidateRequiredFields(req); err != nil {
 		return nil, err
 	}
 	if err := validation.ValidateProjectName(req.Name); err != nil {
 		return nil, err
 	}
-	if err := validation.ValidateCreateTimeSeries(req.TimeSeries, s.metricDescriptorData.UploadedMetricDescriptors, s.uploadedPoints); err != nil {
+	if err := validation.ValidateCreateTimeSeries(req.TimeSeries, s.timeSeriesData, s.metricDescriptorData.UploadedMetricDescriptors); err != nil {
 		return nil, err
 	}
-	s.uploadedPointsLock.Lock()
-	defer s.uploadedPointsLock.Unlock()
-	validation.AddPoint(req.TimeSeries, s.uploadedPoints)
+	validation.AddPoint(req.TimeSeries, s.timeSeriesData.UploadedPoints)
 	return &empty.Empty{}, nil
 }
 
@@ -198,4 +195,9 @@ func addMetricDescriptorToSummary(summary *[]*validation.DescriptorStatus, metri
 // MetricDescriptorSummary returns the metric descriptor data to display in the summary page.
 func (s *MockMetricServer) MetricDescriptorSummary() []*validation.DescriptorStatus {
 	return s.metricDescriptorData.MetricDescriptorSummary
+}
+
+// TimeSeriesSummary returns the time series data to display in the summary page.
+func (s *MockMetricServer) TimeSeriesSummary() []*validation.TimeSeriesStatus {
+	return s.timeSeriesData.TimeSeriesSummary
 }

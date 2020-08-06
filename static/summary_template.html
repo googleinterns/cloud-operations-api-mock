@@ -10,7 +10,7 @@
   <div class="container-summary">
 
     <!-- Trace table -->
-    <h1 style="color: #6c7ae0; text-decoration: underline;">Trace Summary</h1>
+    <h1 class="title">Trace</h1>
     <div class="summary">
       <div class="summary-head">
         <table>
@@ -43,7 +43,7 @@
     </div>
 
     <!-- Metric Descriptor table -->
-    <h1 style="color: #6c7ae0; text-decoration: underline;">Metric Descriptors Summary</h1>
+    <h1 class="title">Metric Descriptors</h1>
     <div class="summary">
       <div class="summary-head">
         <table>
@@ -56,7 +56,6 @@
           </thead>
         </table>
       </div>
-
       <div class="summary-body">
         <table>
           <tbody>
@@ -69,6 +68,49 @@
               <td class="cell">{{ $md.MetricDescriptor.Name }}</td>
               <td class="cell">{{ $md.MetricDescriptor.Type }}</td>
               <td class="cell">{{ $md.Status }}</td>
+              </tr>
+          {{ end }}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Time Series table -->
+    <h1 class="title">Time Series</h1>
+    <div class="summary">
+      <div class="summary-head">
+        <table>
+          <thead>
+          <tr class="head">
+            <th class="cell">Metric Type</th>
+            <th class="cell">Metric Labels</th>
+            <th class="cell">Monitored Resource Type</th>
+            <th class="cell">Monitored Resource Labels</th>
+            <th class="cell">Point Interval</th>
+            <th class="cell">Status</th>
+          </tr>
+          </thead>
+        </table>
+      </div>
+      <div class="summary-body">
+        <table>
+          <tbody>
+          {{ range $index, $ts := .TimeSeries }}
+              {{ if eq $ts.Status "OK" }}
+                <tr class="body">
+              {{ else }}
+                <tr class="body" style="border: solid 2px red;">
+              {{ end }}
+              <td class="cell">{{ $ts.TimeSeries.Metric.Type }}</td>
+              <td class="cell">{{ $ts.TimeSeries.Metric.Labels }}</td>
+              <td class="cell">{{ $ts.TimeSeries.Resource.Type }}</td>
+              <td class="cell">{{ $ts.TimeSeries.Resource.Labels }}</td>
+              {{ if $ts.TimeSeries.Points }}
+                <td class="cell">{{ (index $ts.TimeSeries.Points 0).Interval }}</td>
+              {{ else }}
+                <td class="cell">Missing Point</td>
+              {{ end }}
+              <td class="cell">{{ $ts.Status }}</td>
               </tr>
           {{ end }}
           </tbody>
