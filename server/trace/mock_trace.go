@@ -123,6 +123,6 @@ func (s *MockTraceServer) SetOnUpload(onUpload func(ctx context.Context, spans [
 	s.onUpload = onUpload
 }
 
-func (s *MockTraceServer) ResultTable() []*cloudtrace.Span {
+func (s *MockTraceServer) SpansSummary() []*cloudtrace.Span {
 	return s.spanData.SpansSummary
 }

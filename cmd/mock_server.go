@@ -24,7 +24,7 @@ import (
 	"syscall"
 
 	mocktrace "github.com/googleinterns/cloud-operations-api-mock/api"
-
+	"github.com/googleinterns/cloud-operations-api-mock/internal/validation"
 	"github.com/googleinterns/cloud-operations-api-mock/server/metric"
 	"github.com/googleinterns/cloud-operations-api-mock/server/trace"
 	"google.golang.org/genproto/googleapis/devtools/cloudtrace/v2"
@@ -43,6 +43,13 @@ var (
 		"If flag is set, a summary page HTML file will be generated")
 )
 
+// summaryTable wraps the summaries for both trace and metrics,
+// and is used to pass data to the HTML template.
+type summaryTable struct {
+	Spans             []*cloudtrace.Span
+	MetricDescriptors []*validation.DescriptorStatus
+}
+
 func main() {
 	flag.Parse()
 	startStandaloneServer()
@@ -60,10 +67,13 @@ func startStandaloneServer() {
 	}
 
 	grpcServer := grpc.NewServer()
+
 	mockTraceServer := trace.NewMockTraceServer()
 	cloudtrace.RegisterTraceServiceServer(grpcServer, mockTraceServer)
 	mocktrace.RegisterMockTraceServiceServer(grpcServer, mockTraceServer)
-	monitoring.RegisterMetricServiceServer(grpcServer, metric.NewMockMetricServer())
+
+	mockMetricServer := metric.NewMockMetricServer()
+	monitoring.RegisterMetricServiceServer(grpcServer, mockMetricServer)
 
 	log.Printf("Listening on %s\n", lis.Addr().String())
 
@@ -77,7 +87,8 @@ func startStandaloneServer() {
 		<-sig
 		grpcServer.GracefulStop()
 		if *summary {
-			writeSummaryPage(mockTraceServer.ResultTable())
+			summaryTable := createSummaryTable(mockTraceServer.SpansSummary(), mockMetricServer.MetricDescriptorSummary())
+			writeSummaryPage(summaryTable)
 		}
 		finish <- true
 	}()
@@ -88,14 +99,21 @@ func startStandaloneServer() {
 	<-finish
 }
 
+func createSummaryTable(spans []*cloudtrace.Span, descriptors []*validation.DescriptorStatus) summaryTable {
+	return summaryTable{
+		Spans:             spans,
+		MetricDescriptors: descriptors,
+	}
+}
+
 // writeSummaryPage creates summary.html from the results and the template HTML.
-func writeSummaryPage(results []*cloudtrace.Span) {
+func writeSummaryPage(table summaryTable) {
 	outputFile, err := os.Create("../static/summary.html")
 	if err != nil {
 		panic(err)
 	}
 	t := template.Must(template.ParseFiles("../static/summary_template.html"))
-	err = t.Execute(outputFile, results)
+	err = t.Execute(outputFile, table)
 	if err != nil {
 		panic(err)
 	}

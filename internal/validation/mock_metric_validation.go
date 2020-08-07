@@ -19,6 +19,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang/protobuf/ptypes"
@@ -42,10 +43,25 @@ const (
 // Service name regex sourced from https://github.com/asaskevich/govalidator/blob/master/patterns.go#L33
 var (
 	labelKeyRegex           = regexp.MustCompile("[a-z][a-zA0-9_-]*")
-	serviceNameRegex        = regexp.MustCompile(`^([a-zA-Z0-9_]{1}[a-zA-Z0-9_-]{0,62}){1}(\.[a-zA-Z0-9_]{1}[a-zA-Z0-9_-]{0,62})*[\._]?$`)
+	serviceNameRegex        = regexp.MustCompile(`^([a-zA-Z0-9_]{1}[a-zA-Z0-9_-]{0,62}){1}(\.[a-zA-Z0-9_]{1}[a-zA-Z0-9_-]{0,62})*[._]?$`)
 	relativeMetricNameRegex = regexp.MustCompile("[A-Za-z0-9_/]{1,100}")
-	diplayNameRegex         = regexp.MustCompile(`opentelemetry\/.*`)
+	displayNameRegex        = regexp.MustCompile(`opentelemetry/.*`)
 )
+
+// MetricDescriptorStatus wraps a MetricDescriptor with the status of its creation.
+// Used in the MetricDescriptor summary table.
+type DescriptorStatus struct {
+	MetricDescriptor *metric.MetricDescriptor
+	Status           string
+}
+
+// MetricDescriptorData is a wrapper struct for all the data that the server
+// keeps with respect to metric descriptors.
+type MetricDescriptorData struct {
+	UploadedMetricDescriptors map[string]*metric.MetricDescriptor
+	MetricDescriptorSummary   []*DescriptorStatus
+	MetricDescriptorsLock     sync.Mutex
+}
 
 // PreviousPoint contains information about the most recently uploaded
 // point for a time series.
@@ -142,7 +158,7 @@ func validateLabels(labels []*lbl.LabelDescriptor) error {
 }
 
 func validateMetricDisplayName(displayName string) error {
-	if !diplayNameRegex.MatchString(displayName) {
+	if !displayNameRegex.MatchString(displayName) {
 		return statusInvalidDisplayName
 	}
 
