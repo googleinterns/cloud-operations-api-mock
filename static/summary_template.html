@@ -8,6 +8,9 @@
 </head>
 <body>
   <div class="container-summary">
+
+    <!-- Trace table -->
+    <h1 style="color: #6c7ae0; text-decoration: underline;">Trace Summary</h1>
     <div class="summary">
       <div class="summary-head">
         <table>
@@ -20,11 +23,10 @@
           </thead>
         </table>
       </div>
-
       <div class="summary-body">
         <table>
           <tbody>
-          {{ range $index, $span := . }}
+          {{ range $index, $span := .Spans }}
               {{ if eq $span.Status.Message "OK" }}
                 <tr class="body">
               {{ else }}
@@ -33,6 +35,40 @@
               <td class="cell">{{ $span.Name }}</td>
               <td class="cell">{{ $span.DisplayName.Value }}</td>
               <td class="cell">{{ $span.Status.Message }}</td>
+              </tr>
+          {{ end }}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Metric Descriptor table -->
+    <h1 style="color: #6c7ae0; text-decoration: underline;">Metric Descriptors Summary</h1>
+    <div class="summary">
+      <div class="summary-head">
+        <table>
+          <thead>
+          <tr class="head">
+            <th class="cell">Metric Descriptor Name</th>
+            <th class="cell">Metric Descriptor Type</th>
+            <th class="cell">Status</th>
+          </tr>
+          </thead>
+        </table>
+      </div>
+
+      <div class="summary-body">
+        <table>
+          <tbody>
+          {{ range $index, $md := .MetricDescriptors }}
+              {{ if eq $md.Status "OK" }}
+                <tr class="body">
+              {{ else }}
+                <tr class="body" style="border: solid 2px red;">
+              {{ end }}
+              <td class="cell">{{ $md.MetricDescriptor.Name }}</td>
+              <td class="cell">{{ $md.MetricDescriptor.Type }}</td>
+              <td class="cell">{{ $md.Status }}</td>
               </tr>
           {{ end }}
           </tbody>
