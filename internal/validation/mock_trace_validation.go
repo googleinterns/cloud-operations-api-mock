@@ -54,7 +54,7 @@ var (
 	}
 	requiredFields = []string{"Name", "SpanId", "DisplayName", "StartTime", "EndTime"}
 	spanNameRegex  = regexp.MustCompile("^projects/[^/]+/traces/[a-fA-F0-9]{32}/spans/[a-fA-F0-9]{16}$")
-	agentRegex     = regexp.MustCompile(`^opentelemetry-[a-zA-Z]+ [0-9]+\.[0-9]+\.[0-9]+; google-cloud-trace-exporter [0-9]+\.[0-9]+\.[0-9]+$`)
+	agentRegex     = regexp.MustCompile(`^opentelemetry-[a-zA-Z]+ \d+(?:\.\d+)+; google-cloud-trace-exporter \d+(?:\.\d+)+$`)
 )
 
 // SpanData wraps all the span data on the server into a struct.
