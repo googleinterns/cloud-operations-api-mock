@@ -31,19 +31,21 @@ import (
 // uploaded data.
 type MockMetricServer struct {
 	monitoring.UnimplementedMetricServiceServer
-	uploadedMetricDescriptors     map[string]*metric.MetricDescriptor
-	uploadedMetricDescriptorsLock sync.Mutex
-	uploadedPoints                map[string]*validation.PreviousPoint
-	uploadedPointsLock            sync.Mutex
+	metricDescriptorData *validation.MetricDescriptorData
+	uploadedPoints       map[string]*validation.PreviousPoint
+	uploadedPointsLock   sync.Mutex
 }
 
 // NewMockMetricServer creates a new MockMetricServer and returns a pointer to it.
 func NewMockMetricServer() *MockMetricServer {
 	uploadedMetricDescriptors := make(map[string]*metric.MetricDescriptor)
+	metricDescriptorData := &validation.MetricDescriptorData{
+		UploadedMetricDescriptors: uploadedMetricDescriptors,
+	}
 	uploadedPoints := make(map[string]*validation.PreviousPoint)
 	return &MockMetricServer{
-		uploadedMetricDescriptors: uploadedMetricDescriptors,
-		uploadedPoints:            uploadedPoints,
+		metricDescriptorData: metricDescriptorData,
+		uploadedPoints:       uploadedPoints,
 	}
 }
 
@@ -77,9 +79,9 @@ func (s *MockMetricServer) GetMetricDescriptor(ctx context.Context, req *monitor
 		return nil, err
 	}
 
-	s.uploadedMetricDescriptorsLock.Lock()
-	defer s.uploadedMetricDescriptorsLock.Unlock()
-	metricDescriptor, err := validation.AccessMetricDescriptor(s.uploadedMetricDescriptors, req.Name)
+	s.metricDescriptorData.MetricDescriptorsLock.Lock()
+	defer s.metricDescriptorData.MetricDescriptorsLock.Unlock()
+	metricDescriptor, err := validation.AccessMetricDescriptor(s.metricDescriptorData.UploadedMetricDescriptors, req.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -92,23 +94,28 @@ func (s *MockMetricServer) GetMetricDescriptor(ctx context.Context, req *monitor
 func (s *MockMetricServer) CreateMetricDescriptor(ctx context.Context, req *monitoring.CreateMetricDescriptorRequest,
 ) (*metric.MetricDescriptor, error) {
 	if err := validation.ValidateRequiredFields(req); err != nil {
+		addMetricDescriptorToSummary(&s.metricDescriptorData.MetricDescriptorSummary, req.MetricDescriptor, err.Error())
 		return nil, err
 	}
 
 	if err := validation.ValidateProjectName(req.Name); err != nil {
+		addMetricDescriptorToSummary(&s.metricDescriptorData.MetricDescriptorSummary, req.MetricDescriptor, err.Error())
 		return nil, err
 	}
 
 	if err := validation.ValidateCreateMetricDescriptor(req.MetricDescriptor); err != nil {
+		addMetricDescriptorToSummary(&s.metricDescriptorData.MetricDescriptorSummary, req.MetricDescriptor, err.Error())
 		return nil, err
 	}
 
-	s.uploadedMetricDescriptorsLock.Lock()
-	defer s.uploadedMetricDescriptorsLock.Unlock()
-	if err := validation.AddMetricDescriptor(s.uploadedMetricDescriptors, req.MetricDescriptor.Type, req.MetricDescriptor); err != nil {
+	s.metricDescriptorData.MetricDescriptorsLock.Lock()
+	defer s.metricDescriptorData.MetricDescriptorsLock.Unlock()
+	if err := validation.AddMetricDescriptor(s.metricDescriptorData.UploadedMetricDescriptors, req.MetricDescriptor.Type, req.MetricDescriptor); err != nil {
+		addMetricDescriptorToSummary(&s.metricDescriptorData.MetricDescriptorSummary, req.MetricDescriptor, err.Error())
 		return nil, err
 	}
 
+	addMetricDescriptorToSummary(&s.metricDescriptorData.MetricDescriptorSummary, req.MetricDescriptor, "OK")
 	return req.MetricDescriptor, nil
 }
 
@@ -120,9 +127,9 @@ func (s *MockMetricServer) DeleteMetricDescriptor(ctx context.Context, req *moni
 		return nil, err
 	}
 
-	s.uploadedMetricDescriptorsLock.Lock()
-	defer s.uploadedMetricDescriptorsLock.Unlock()
-	if err := validation.RemoveMetricDescriptor(s.uploadedMetricDescriptors, req.Name); err != nil {
+	s.metricDescriptorData.MetricDescriptorsLock.Lock()
+	defer s.metricDescriptorData.MetricDescriptorsLock.Unlock()
+	if err := validation.RemoveMetricDescriptor(s.metricDescriptorData.UploadedMetricDescriptors, req.Name); err != nil {
 		return nil, err
 	}
 
@@ -157,7 +164,7 @@ func (s *MockMetricServer) CreateTimeSeries(ctx context.Context, req *monitoring
 	if err := validation.ValidateProjectName(req.Name); err != nil {
 		return nil, err
 	}
-	if err := validation.ValidateCreateTimeSeries(req.TimeSeries, s.uploadedMetricDescriptors, s.uploadedPoints); err != nil {
+	if err := validation.ValidateCreateTimeSeries(req.TimeSeries, s.metricDescriptorData.UploadedMetricDescriptors, s.uploadedPoints); err != nil {
 		return nil, err
 	}
 	s.uploadedPointsLock.Lock()
@@ -177,4 +184,18 @@ func (s *MockMetricServer) ListTimeSeries(ctx context.Context, req *monitoring.L
 		NextPageToken:   "",
 		ExecutionErrors: []*status.Status{},
 	}, nil
+}
+
+// addMetricDescriptorToSummary adds the given metric descriptor and status to the summary.
+func addMetricDescriptorToSummary(summary *[]*validation.DescriptorStatus, metricDescriptor *metric.MetricDescriptor, err string) {
+	metricDescriptorStatus := &validation.DescriptorStatus{
+		MetricDescriptor: metricDescriptor,
+		Status:           err,
+	}
+	*summary = append(*summary, metricDescriptorStatus)
+}
+
+// MetricDescriptorSummary returns the metric descriptor data to display in the summary page.
+func (s *MockMetricServer) MetricDescriptorSummary() []*validation.DescriptorStatus {
+	return s.metricDescriptorData.MetricDescriptorSummary
 }
