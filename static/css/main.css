@@ -1,0 +1,94 @@
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+body, html {
+	height: 100%;
+	font-family: sans-serif;
+}
+
+.container-summary {
+  width: 100%;
+  min-height: 100vh;
+  background: #fff;
+
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: -moz-box;
+  display: -ms-flexbox;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 33px 30px;
+}
+
+.summary {
+  background-color: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  padding-top: 60px;
+  box-shadow: 0 0 40px 0 rgba(0, 0, 0, 0.15);
+  -moz-box-shadow: 0 0 40px 0 rgba(0, 0, 0, 0.15);
+  -webkit-box-shadow: 0 0 40px 0 rgba(0, 0, 0, 0.15);
+  -o-box-shadow: 0 0 40px 0 rgba(0, 0, 0, 0.15);
+  -ms-box-shadow: 0 0px 40px 0px rgba(0, 0, 0, 0.15);
+}
+
+table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+th, td {
+  font-weight: unset;
+  padding-right: 10px;
+}
+
+.cell {
+  padding-left: 40px;
+  padding-right: 40px;
+  word-wrap: break-word;
+}
+
+.summary-head th {
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+
+.summary-body td {
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+
+.summary-head {
+  text-align: left;
+  position: absolute;
+  width: 100%;
+  top: 0;
+  left: 0;
+}
+
+.summary-body {
+  max-height: 585px;
+  overflow: auto;
+}
+
+.summary th {
+  font-family: Verdana, sans-serif;
+  font-size: 18px;
+  color: #fff;
+  line-height: 1.4;
+  background-color: #6c7ae0;
+}
+
+.summary td {
+  font-family: Verdana, sans-serif;
+  font-size: 14px;
+  color: #808080;
+  line-height: 1.4;
+}

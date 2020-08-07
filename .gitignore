@@ -17,3 +17,6 @@
 # Test binary, built with `go test -c`
 *.test
 
+# Static assets
+/static/fonts
+/static/vendor
