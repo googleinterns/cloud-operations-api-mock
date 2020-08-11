@@ -70,6 +70,21 @@ type PreviousPoint struct {
 	Time  time.Time
 }
 
+// TimeSeriesStruct wraps a TimeSeries with the status of its creation.
+// Used in the TimeSeries summary table.
+type TimeSeriesStatus struct {
+	TimeSeries *monitoring.TimeSeries
+	Status     string
+}
+
+// TimeSeriesData is a wrapper struct for all the data that the server
+// keeps with respect to time series.
+type TimeSeriesData struct {
+	UploadedPoints    map[string]*PreviousPoint
+	TimeSeriesSummary []*TimeSeriesStatus
+	TimeSeriesLock    sync.Mutex
+}
+
 // ValidateRequiredFields verifies that the given request contains the required fields.
 func ValidateRequiredFields(req interface{}) error {
 	reqReflect := reflect.ValueOf(req)
@@ -261,43 +276,69 @@ func ValidateRateLimit(timeSeries []*monitoring.TimeSeries, uploadedPoints map[s
 }
 
 // ValidateCreateTimeSeries checks that the given TimeSeries conform to the API requirements.
-func ValidateCreateTimeSeries(timeSeries []*monitoring.TimeSeries, descriptors map[string]*metric.MetricDescriptor,
-	uploadedPoints map[string]*PreviousPoint) error {
+func ValidateCreateTimeSeries(timeSeries []*monitoring.TimeSeries, timeSeriesData *TimeSeriesData, descriptors map[string]*metric.MetricDescriptor) error {
 	if len(timeSeries) > maxTimeSeriesPerRequest {
 		return statusTooManyTimeSeries
 	}
 
+	var overallErr error
 	for _, ts := range timeSeries {
+		var currentErr error
+
 		// Check that required fields for time series are present.
 		if ts.Metric == nil || len(ts.Points) != 1 || ts.Resource == nil {
-			return statusInvalidTimeSeries
+			addTimeSeriesToSummary(&timeSeriesData.TimeSeriesSummary, ts, statusInvalidTimeSeries.Error())
+			currentErr = statusInvalidTimeSeries
 		}
 
 		// Check that the metric labels follow the constraints.
 		for k, v := range ts.Metric.Labels {
 			if len(k) > maxTimeSeriesLabelKeyBytes {
-				return statusInvalidTimeSeriesLabelKey
+				addTimeSeriesToSummary(&timeSeriesData.TimeSeriesSummary, ts, statusInvalidTimeSeriesLabelKey.Error())
+				currentErr = statusInvalidTimeSeriesLabelKey
 			}
 
 			if len(v) > maxTimeSeriesLabelValueBytes {
-				return statusInvalidTimeSeriesLabelValue
+				addTimeSeriesToSummary(&timeSeriesData.TimeSeriesSummary, ts, statusInvalidTimeSeriesLabelValue.Error())
+				currentErr = statusInvalidTimeSeriesLabelValue
 			}
 		}
 
 		if err := validateMetricKind(ts, descriptors); err != nil {
-			return err
+			addTimeSeriesToSummary(&timeSeriesData.TimeSeriesSummary, ts, err.Error())
+			currentErr = err
 		}
 
-		if err := validateValueType(ts.ValueType, ts.Points[0]); err != nil {
-			return err
+		if len(ts.Points) == 1 {
+			if err := validateValueType(ts.ValueType, ts.Points[0]); err != nil {
+				addTimeSeriesToSummary(&timeSeriesData.TimeSeriesSummary, ts, err.Error())
+				currentErr = err
+			}
+
+			if err := validatePoint(ts, timeSeriesData.UploadedPoints); err != nil {
+				addTimeSeriesToSummary(&timeSeriesData.TimeSeriesSummary, ts, err.Error())
+				currentErr = err
+			}
 		}
 
-		if err := validatePoint(ts, uploadedPoints); err != nil {
-			return err
+		if currentErr == nil {
+			addTimeSeriesToSummary(&timeSeriesData.TimeSeriesSummary, ts, "OK")
+		} else {
+			overallErr = currentErr
 		}
 	}
 
+	if overallErr != nil {
+		return overallErr
+	}
 	return nil
+}
+
+func addTimeSeriesToSummary(summary *[]*TimeSeriesStatus, ts *monitoring.TimeSeries, err string) {
+	*summary = append(*summary, &TimeSeriesStatus{
+		TimeSeries: ts,
+		Status:     err,
+	})
 }
 
 // validateMetricKind check that if metric_kind is present,
