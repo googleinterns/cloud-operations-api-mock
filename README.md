@@ -1,5 +1,10 @@
 [![GoDoc](https://godoc.org/github.com/googleinterns/cloud-operations-api-mock?status.svg)](https://pkg.go.dev/github.com/googleinterns/cloud-operations-api-mock)
 
+# This Repository is Archived
+
+We recommend testing against real GCP APIs instead, or writing simple mocks for
+testing your use-case locally.
+
 # Cloud Operations API Mock
 
 This project allows your tests to easily mock out Google Cloud Monitoring
